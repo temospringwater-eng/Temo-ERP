@@ -16,6 +16,7 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - run: npm test
       - run: node --check server.js
       - name: Check service syntax
         run: |

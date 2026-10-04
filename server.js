@@ -63,21 +63,7 @@ app.use((req, res, next) => {
     }
   });
 
-  app.post('/api/me/password', async (req, res) => {
-    try {
-      const currentPassword = String(req.body?.currentPassword || '');
-      const newPassword = String(req.body?.newPassword || '');
-      const confirmPassword = String(req.body?.confirmPassword || '');
-      const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
-      if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
-      if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
-      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
-      await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
-      res.json({ success: true, mustChangePassword: false });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Unable to change password.' });
-    }
-  });
+
   next();
 });
 
@@ -158,13 +144,13 @@ app.post('/api/customer/login', async (req, res) => {
     const identifier = String(req.body?.email || req.body?.username || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     if (!identifier || password.length < 1) return res.status(400).json({ message: 'Email or username and password are required.' });
-    const rows = await query(`SELECT u.id, u.username, u.email, u.password_hash, u.name, u.role, u.customer_id, u.company_id,
-      c.name AS company_name, c.address AS company_address, cu.name AS customer_name
+    const rows = await query(`SELECT u.id, u.username, u.email, u.password_hash, u.name, u.role, u.customer_id, u.company_id, u.status AS user_status,
+      c.status AS company_status, c.name AS company_name, c.address AS company_address, cu.name AS customer_name
       FROM users u LEFT JOIN companies c ON c.id = u.company_id AND c.active = 1
       LEFT JOIN customers cu ON cu.id = u.customer_id AND cu.company_id = u.company_id
       WHERE (LOWER(u.email) = ? OR LOWER(u.username) = ?) AND u.role = 'customer' AND u.active = 1`, [identifier, identifier]);
     const user = rows[0];
-    if (!user || !user.customer_id || !user.company_id || !user.customer_name || !verifyPassword(password, user.password_hash)) return res.status(401).json({ message: 'Invalid customer credentials.' });
+    if (!user || user.user_status !== 'active' || user.company_status !== 'active' || !user.company_name || !user.customer_id || !user.company_id || !user.customer_name || !verifyPassword(password, user.password_hash)) return res.status(401).json({ message: 'Invalid customer credentials.' });
     const token = await createSession(user.id);
     await update('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
     res.json({ success: true, token, user: { id: user.id, customerId: user.customer_id, name: user.customer_name || user.name, email: user.email, companyId: user.company_id, companyName: user.company_name, companyAddress: user.company_address } });
@@ -2207,6 +2193,22 @@ app.use('/api', (req, res, next) => {
   });
 });
 
+app.post('/api/me/password', async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+    const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
+    if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
+    await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
+    await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
+    res.json({ success: true, mustChangePassword: false });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Unable to change password.' });
+  }
+});
+
 aiAutomationService.registerRoutes(app, requireAuth, requireRole);
 whatsappAssistantService.registerRoutes(app, requireAuth, requireRole);
 platformOperationsService.registerRoutes(app, requireAuth, requireRole);
@@ -2451,7 +2453,7 @@ app.post('/api/customers/:id/portal-access', requireRole(...customerPortalRoles)
     const customerId = Number(req.params.id); const customer = (await query('SELECT * FROM customers WHERE id = ? AND company_id = ?', [customerId, req.companyId]))[0];
     const email = String(req.body?.email || customer?.email || '').trim().toLowerCase(); const password = String(req.body?.password || '');
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
-    if (!/^\\S+@\\S+\\.\\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
     const username = `customer_${customerId}`; const existing = (await query('SELECT id FROM users WHERE (LOWER(email) = ? OR username = ?) AND id != COALESCE(?, -1)', [email, username, null]))[0];
     if (existing) return res.status(409).json({ message: 'That email or customer portal username is already in use.' });
     const linked = (await query('SELECT id FROM users WHERE customer_id = ? AND company_id = ?', [customerId, req.companyId]))[0];
