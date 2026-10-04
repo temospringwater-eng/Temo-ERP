@@ -1,1 +1,1597 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TEMO AQUAFLOW Staging</title></head><body><main><h1>TEMO AQUAFLOW — Staging API</h1><p>This branch is for Water Club integration testing.</p><p>Health: <code>/api/health</code></p></main></body></html>
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TEMO AQUAFLOW</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+      <div id="loginOverlay" class="login-overlay">
+      <div class="login-shell">
+        <div class="login-brand-panel">
+          <div class="brand-mark">T</div>
+          <div>
+            <p class="login-kicker" data-i18n="waterBusinessManagement">WATER BUSINESS MANAGEMENT</p>
+                        <h1 data-i18n="springWater">TEMO AQUAFLOW</h1>
+          </div>
+          <p class="login-subtext" data-i18n="loginSubtext">Customers, deliveries, billing, inventory and reporting in one intelligent workspace.</p>
+          <div class="feature-pills">
+            <span data-i18n="customerManagement">Customer Management</span>
+                        <span data-i18n="smartBilling">Smart Billing</span>
+                        <span data-i18n="inventoryControl">Inventory Control</span>
+                        <span data-i18n="powerfulReports">Powerful Reports</span>
+          </div>
+        </div>
+
+        <div class="login-box">
+          <p class="login-kicker accent" data-i18n="welcomeBack">WELCOME BACK</p>
+                    <h2 data-i18n="signInTitle">Sign in to your account</h2>
+                    <p class="login-helper" data-i18n="signInHelper">Enter your credentials to access your workspace.</p>
+          <form id="loginForm" class="stack-form">
+            <input id="loginUsername" type="text" placeholder="Username" data-i18n-placeholder="username" required />
+                        <input id="loginPassword" type="password" placeholder="Password" data-i18n-placeholder="password" required />
+                        <button type="submit" data-i18n="login">Login</button>
+          </form>
+          <div class="login-meta">
+            <a href="/customer.html">Customer self-service portal</a>
+            <a id="forgotPasswordLink" href="#" data-i18n="forgotPassword">Forgot Password?</a>
+                        <span><span data-i18n="noAccount">Don’t have an account yet?</span> <a id="signupLink" href="#" data-i18n="signup">Signup</a></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="signupOverlay" class="login-overlay hidden">
+      <div class="login-box standalone-auth-box">
+        <p class="login-kicker accent">START YOUR WORKSPACE</p>
+        <h2>Create your company account</h2>
+        <p class="login-helper">Your company and 14-day trial will be created automatically.</p>
+        <form id="signupForm" class="stack-form">
+          <input id="signupCompanyName" placeholder="Company name e.g. Aqua Pure Ltd" required />
+          <input id="signupOwnerName" placeholder="Owner/admin name e.g. Sara Ahmad" required />
+          <div class="field-row two-col">
+            <input id="signupEmail" type="email" placeholder="Email e.g. sara@company.com" required />
+            <input id="signupPhone" placeholder="Phone e.g. 0300-1234567" />
+          </div>
+          <div class="field-row two-col">
+            <input id="signupUsername" placeholder="Username e.g. sara_admin" required />
+            <input id="signupCountry" placeholder="Country e.g. Pakistan" />
+          </div>
+          <input id="signupAddress" placeholder="Business address" />
+          <div class="field-row two-col">
+            <input id="signupPassword" type="password" placeholder="Password, 8+ characters" required />
+            <input id="signupConfirmPassword" type="password" placeholder="Confirm password" required />
+          </div>
+          <button type="submit">Create account</button>
+          <button id="backToLoginFromSignup" class="action-btn" type="button">Back to login</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="resetOverlay" class="login-overlay hidden">
+      <div class="login-box standalone-auth-box">
+        <p class="login-kicker accent">ACCOUNT RECOVERY</p>
+        <h2>Reset your password</h2>
+        <p id="resetHelper" class="login-helper">Request a password reset email using your username or email.</p>
+        <form id="forgotForm" class="stack-form">
+          <input id="forgotIdentifier" placeholder="Username or email" required />
+          <button type="submit">Send reset email</button>
+        </form>
+        <form id="resetForm" class="stack-form hidden">
+          <input id="resetToken" type="hidden" required />
+          <input id="resetPassword" type="password" placeholder="New password" required />
+          <input id="resetConfirmPassword" type="password" placeholder="Confirm new password" required />
+          <button type="submit">Reset password</button>
+        </form>
+        <button id="backToLoginFromReset" class="action-btn" type="button">Back to login</button>
+      </div>
+
+    </div>
+
+      <div id="passwordChangeOverlay" class="login-overlay hidden">
+        <div class="login-box standalone-auth-box">
+          <p class="login-kicker accent">SECURE YOUR ACCOUNT</p>
+          <h2>Change temporary password</h2>
+          <p class="login-helper">You must choose a new password before using the ERP.</p>
+          <form id="passwordChangeForm" class="stack-form">
+            <input id="currentPassword" type="password" placeholder="Temporary password" required />
+            <input id="newPassword" type="password" placeholder="New password (8+ characters)" required />
+            <input id="confirmNewPassword" type="password" placeholder="Confirm new password" required />
+            <button type="submit">Change Password</button>
+          </form>
+        </div>
+      </div>
+
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand-box">
+          <h2>TEMO AQUAFLOW</h2>
+          <p>Business Management</p>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-btn active" data-tab="dashboard" data-i18n="dashboard">Dashboard</button>
+                    <button class="nav-btn" data-feature="basic_reports" data-tab="assistant">AI Assistant</button>
+                    <button class="nav-btn" data-feature="inventory" data-tab="products" data-i18n="products">Products</button>
+                    <button class="nav-btn" data-feature="inventory" data-tab="bottles" data-i18n="bottles">Bottles</button>
+                    <button class="nav-btn" data-feature="sales" data-tab="sales" data-i18n="sales">Sales</button>
+                    <button class="nav-btn" data-feature="sales" data-tab="orders" data-i18n="ordersDelivery">Orders & Delivery</button>
+                    <button class="nav-btn" data-feature="inventory" data-tab="fleet" data-i18n="fleet">Fleet</button>
+                    <button class="nav-btn" data-feature="employees" data-tab="employees" data-i18n="employees">Employees</button>
+          <button class="nav-btn" data-feature="attendance" data-tab="attendance" data-i18n="attendance">Attendance</button>
+                    <button id="payrollNav" class="nav-btn" data-feature="payroll" data-tab="payroll" data-i18n="payroll">Payroll</button>
+                    <button id="driverNav" class="nav-btn hidden" data-tab="driverMode" data-i18n="driverMode">Driver mode</button>
+                    <button class="nav-btn" data-feature="sales" data-tab="deliverySubscriptions" data-i18n="recurringDeliveries">Recurring Deliveries</button>
+                    <button class="nav-btn" data-feature="customers" data-tab="customers" data-i18n="customers">Customers</button>
+                    <button class="nav-btn" data-feature="crm" data-tab="crm">Loyalty & CRM</button>
+                    <button class="nav-btn" data-feature="sales" data-tab="creditPricing">Credit & Pricing</button>
+                    <button class="nav-btn" data-feature="crm" data-tab="commissions">Commissions</button>
+                    <button id="territoryNav" class="nav-btn" data-feature="multi_branch" data-tab="territories">Areas & Zones</button>
+                    <button class="nav-btn" data-feature="qr_code" data-tab="qrCodes">QR Codes</button>
+                    <button class="nav-btn" data-feature="customers" data-tab="complaints" data-i18n="complaintsSupport">Complaints & Support</button>
+                    <button class="nav-btn" data-feature="suppliers" data-tab="suppliers" data-i18n="suppliers">Suppliers</button>
+                    <button class="nav-btn" data-feature="purchases" data-tab="procurement">Procurement Marketplace</button>
+                    <button class="nav-btn" data-feature="purchases" data-tab="purchases" data-i18n="purchases">Purchases</button>
+                    <button class="nav-btn" data-feature="expenses" data-tab="expenses" data-i18n="expenses">Expenses</button>
+                    <button class="nav-btn" data-feature="invoices" data-tab="payments" data-i18n="payments">Payments</button>
+                    <button id="billingNav" class="nav-btn" data-tab="billing">Billing / Subscription</button>
+                    <button class="nav-btn" data-feature="inventory" data-tab="production">Production & Quality</button>
+                    <button class="nav-btn" data-feature="basic_reports" data-tab="documents">Documents & Certificates</button>
+                    <button class="nav-btn" data-feature="basic_reports" data-tab="reports" data-i18n="reports">Reports</button>
+                    <button id="auditNav" class="nav-btn" data-feature="audit_logs" data-tab="auditLogs">Audit logs</button>
+                    <button id="operationsNav" class="nav-btn" data-feature="audit_logs" data-tab="operations">Security & Recovery</button>
+                    <button id="companyNav" class="nav-btn hidden" data-tab="companies" data-i18n="companiesUsers">Companies & Users</button>
+                    <button id="franchiseNav" class="nav-btn hidden" data-feature="multi_branch" data-tab="franchiseManagement" data-i18n="franchiseManagement">Franchise Management</button>
+                    <button id="logoutBtn" class="nav-btn logout-btn" type="button" data-i18n="logout">Logout</button>
+        </nav>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="topbar-brand">
+            <div class="brand-mark small">T</div>
+            <div>
+              <p class="section-kicker">Overview</p>
+              <h1>TEMO AQUAFLOW</h1>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <div class="global-search-wrap">
+              <label class="sr-only" for="globalSearch">Global search</label>
+              <input id="globalSearch" class="global-search" type="search" placeholder="Search customers, orders, products…" autocomplete="off" />
+              <div id="globalSearchResults" class="global-search-results hidden" role="listbox"></div>
+            </div>
+            <button id="notificationCenterBtn" class="action-btn notification-center-btn" type="button" aria-expanded="false">Notifications <span id="notificationUnreadBadge" class="mini-badge">0</span></button>
+            <div id="notificationCenter" class="notification-center hidden" aria-live="polite"></div>
+                      <div class="language-control">
+                        <label for="appLanguage" data-i18n="language">Language</label>
+                        <select id="appLanguage" class="language-select" aria-label="Language">
+                          <option value="en">English</option>
+                          <option value="ur">اردو</option>
+                          <option value="ar">العربية</option>
+                        </select>
+                      </div>
+                      <select id="companySwitcher" class="hidden" aria-label="Switch company"></select>
+            <button id="topbarExportBtn" class="action-btn" type="button">Export</button>
+            <span id="connectivityIndicator" class="status-pill connectivity-indicator" role="status" aria-live="polite">Online</span>
+            <span id="offlineQueueIndicator" class="status-pill offline-queue-indicator" role="status" aria-live="polite">0 pending</span>
+          </div>
+        </header>
+
+        <section class="tab active" id="dashboard">
+          <div id="subscriptionBanner" class="panel hidden" role="status"></div>
+          <div class="dashboard-header">
+            <div>
+              <p class="section-kicker">Business Summary</p>
+              <h2>Welcome back</h2>
+            </div>
+            <div class="dashboard-tags">
+              <span id="dashboardPeriodStatus" class="tag success">Live analytics</span>
+              <span class="tag neutral">Database connected</span>
+            </div>
+          </div>
+
+          <div class="delivery-center">
+            <div class="section-heading delivery-heading">
+              <div>
+                <p class="section-kicker">Delivery operations</p>
+                <h3>Control every drop from one place</h3>
+              </div>
+              <span class="chip positive">Live operations</span>
+            </div>
+
+            <div class="delivery-layout">
+              <div class="trackboard-card">
+                <div class="trackboard-topline">
+                  <div>
+                    <span class="live-dot"></span>
+                    <strong>Trackboard</strong>
+                  </div>
+                  <span id="trackboardDate" class="muted-label">Today</span>
+                </div>
+                <div class="route-map" aria-label="Delivery route overview">
+                  <span class="map-route route-one"></span>
+                  <span class="map-route route-two"></span>
+                  <span class="map-pin pin-one">1</span>
+                  <span class="map-pin pin-two">2</span>
+                  <span class="map-pin pin-three">3</span>
+                  <span class="map-pin pin-four">4</span>
+                  <span class="map-label label-one">F-8</span>
+                  <span class="map-label label-two">Blue Area</span>
+                  <span class="map-label label-three">I-8</span>
+                </div>
+                <div class="trackboard-footer">
+                  <span><strong>3</strong> active riders</span>
+                  <span><strong>18</strong> stops planned</span>
+                  <span><strong>14</strong> completed</span>
+                </div>
+              </div>
+
+              <div class="delivery-actions">
+                <button class="delivery-action" data-delivery-action="plan-routes" type="button">
+                  <span class="action-icon">↗</span>
+                  <span><strong>Plan zone visits</strong><small>Assign routes by area</small></span>
+                </button>
+                <button class="delivery-action" data-delivery-action="customer-alerts" type="button">
+                  <span class="action-icon">◌</span>
+                  <span><strong>Send customer alerts</strong><small>Open delivery status tools</small></span>
+                </button>
+                <button class="delivery-action" data-delivery-action="proof-of-delivery" type="button">
+                  <span class="action-icon">✓</span>
+                  <span><strong>Capture proof of delivery</strong><small>Open driver delivery records</small></span>
+                </button>
+                <button class="delivery-action" data-delivery-action="staff-roles" type="button">
+                  <span class="action-icon">⌘</span>
+                  <span><strong>Manage staff roles</strong><small>Control team permissions</small></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="delivery-alerts">
+              <div class="alert-item warning-alert">
+                <span class="alert-symbol">!</span>
+                <span><strong>Sleeping customers</strong><small>2 accounts have not ordered in 30 days</small></span>
+                <button class="delivery-alert-action" data-delivery-action="sleeping-customers" type="button">Review</button>
+              </div>
+              <div class="alert-item info-alert">
+                <span class="alert-symbol">i</span>
+                <span><strong>Route efficiency</strong><small>F-8 route is 18% faster than last week</small></span>
+                <button class="delivery-alert-action" data-delivery-action="route-report" type="button">View report</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="card accent-blue">
+              <span>Total Revenue</span>
+              <strong id="revenueValue">0</strong>
+            </div>
+            <div class="card accent-green">
+              <span>Purchases</span>
+              <strong id="purchaseValue">0</strong>
+            </div>
+            <div class="card accent-orange">
+              <span>Expenses</span>
+              <strong id="expenseValue">0</strong>
+            </div>
+            <div class="card accent-purple">
+              <span>Profit</span>
+              <strong id="profitValue">0</strong>
+            </div>
+            <div class="card accent-sky">
+              <span>Products</span>
+              <strong id="productsValue">0</strong>
+            </div>
+            <div class="card accent-teal">
+              <span>Stock Units</span>
+              <strong id="stockValue">0</strong>
+            </div>
+            <div class="card accent-gold">
+              <span>Customers</span>
+              <strong id="customersValue">0</strong>
+            </div>
+            <div class="card accent-rose">
+              <span>Suppliers</span>
+              <strong id="suppliersValue">0</strong>
+            </div>
+          </div>
+
+          <section class="erp-insights-panel">
+            <div class="erp-insights-header">
+              <div>
+                <p class="section-kicker">Live business intelligence</p>
+                <h3>Owner's control center</h3>
+              </div>
+              <div class="analytics-filters">
+                <select id="analyticsType" aria-label="Analytics period">
+                  <option value="">All time</option>
+                  <option value="daily">Daily</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                  <option value="custom">Custom range</option>
+                </select>
+                <input id="analyticsDate" class="hidden" type="date" aria-label="Analytics date" />
+                <input id="analyticsMonth" class="hidden" type="month" aria-label="Analytics month" />
+                <input id="analyticsYear" class="hidden" type="number" min="2000" max="2100" placeholder="Year" aria-label="Analytics year" />
+                <input id="analyticsStart" class="hidden" type="date" aria-label="Analytics start date" />
+                <input id="analyticsEnd" class="hidden" type="date" aria-label="Analytics end date" />
+                <button id="applyAnalyticsFilter" type="button">Apply</button>
+              </div>
+            </div>
+
+            <div class="erp-kpi-grid">
+              <div class="erp-kpi"><span>Total Sales</span><strong id="analyticsSales">Rs 0</strong><small id="analyticsSalesCount">0 invoices</small></div>
+              <div class="erp-kpi"><span>Gross Profit</span><strong id="analyticsGrossProfit">Rs 0</strong><small>Sales minus purchases</small></div>
+              <div class="erp-kpi"><span>Net Profit</span><strong id="analyticsNetProfit">Rs 0</strong><small>After operating expenses</small></div>
+              <div class="erp-kpi"><span>Cash Balance</span><strong id="analyticsCashBalance">Rs 0</strong><small>Cash position</small></div>
+              <div class="erp-kpi"><span>Bank Balance</span><strong id="analyticsBankBalance">Rs 0</strong><small>Bank position</small></div>
+              <div class="erp-kpi"><span>Receivables</span><strong id="analyticsReceivables">Rs 0</strong><small>Customer outstanding</small></div>
+              <div class="erp-kpi"><span>Payables</span><strong id="analyticsPayables">Rs 0</strong><small>Supplier outstanding</small></div>
+              <div class="erp-kpi"><span>Inventory Value</span><strong id="analyticsInventory">Rs 0</strong><small id="analyticsInventoryUnits">0 units</small></div>
+              <div class="erp-kpi"><span>Low Stock</span><strong id="analyticsLowStock">0</strong><small>Items needing attention</small></div>
+              <div class="erp-kpi"><span>Pending Invoices</span><strong id="analyticsPending">0</strong><small>Sales invoices</small></div>
+            </div>
+
+            <div class="analytics-grid">
+              <div class="analytics-card cash-flow-card">
+                <div class="panel-header"><h4>Cash flow</h4><span class="mini-badge" id="cashFlowPeriod">All time</span></div>
+                <div class="cash-flow-summary">
+                  <div><span>Received</span><strong id="cashReceived">Rs 0</strong></div>
+                  <div><span>Paid</span><strong id="cashPaid">Rs 0</strong></div>
+                  <div><span>Net flow</span><strong id="netCashFlow">Rs 0</strong></div>
+                  <div><span>Closing</span><strong id="closingBalance">Rs 0</strong></div>
+                </div>
+                <div id="cashFlowBars" class="analytics-bars"></div>
+              </div>
+              <div class="analytics-card">
+                <div class="panel-header"><h4>Sales & purchases trend</h4><span class="mini-badge">Real transactions</span></div>
+                <div id="salesTrendBars" class="analytics-bars trend-bars"></div>
+              </div>
+              <div class="analytics-card">
+                <div class="panel-header"><h4>Payment methods</h4><span class="mini-badge">Receipts / payments</span></div>
+                <ul id="paymentMethodList" class="plain-list analytics-list"></ul>
+              </div>
+              <div class="analytics-card">
+                <div class="panel-header"><h4>Customer-held stock</h4><span class="mini-badge">Returnable inventory</span></div>
+                <div class="analytics-table-wrap"><table><thead><tr><th>Customer</th><th>Product</th><th>Units</th></tr></thead><tbody id="customerStockBody"></tbody></table></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab" id="billing">
+            <div class="panel"><div class="panel-header"><div><p class="section-kicker">Self-service billing</p><h2>Billing / Subscription</h2></div><button id="downloadSubscriptionInvoice" class="action-btn" type="button">Download Invoice PDF</button></div><div id="billingSummary" class="billing-summary"></div></div>
+            <div class="panel"><div class="panel-header"><h3>Request Renewal</h3></div><form id="renewalRequestForm" class="stack-form"><div class="field-row three-col"><select id="renewalRequestPeriod"><option value="monthly">1 Month</option><option value="quarterly">3 Months</option><option value="6_months">6 Months</option><option value="yearly">1 Year</option><option value="custom">Custom</option></select><input id="renewalRequestDays" type="number" min="1" max="3650" step="1" placeholder="Custom days" class="hidden" /><input id="renewalRequestNote" maxlength="1000" placeholder="Optional note" /></div><button type="submit">Request Renewal</button></form></div>
+            <div class="panel table-panel"><div class="panel-header"><h3>Payment History</h3></div><div class="table-scroll"><table><thead><tr><th>Invoice</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead><tbody id="billingPaymentsBody"></tbody></table></div></div>
+            <div class="panel table-panel"><div class="panel-header"><h3>Payment Proofs</h3></div><form id="paymentProofForm" class="stack-form"><input id="paymentProofFile" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required /><button type="submit">Upload Payment Proof</button></form><div class="table-scroll"><table><thead><tr><th>File</th><th>Status</th><th>Note</th><th>Date</th></tr></thead><tbody id="paymentProofsBody"></tbody></table></div></div>
+            <div class="panel table-panel"><div class="panel-header"><h3>Renewal Requests</h3></div><div class="table-scroll"><table><thead><tr><th>Period</th><th>Status</th><th>Note</th><th>Date</th></tr></thead><tbody id="renewalRequestsBody"></tbody></table></div></div>
+          </section>
+
+          <div class="insights-panel">
+            <div class="section-heading">
+              <p class="section-kicker">Management view</p>
+              <h3>Operational performance</h3>
+            </div>
+
+            <div class="insights-layout">
+              <div class="chart-card">
+                <div class="chart-header">
+                  <h4>Revenue overview</h4>
+                  <span class="chip positive">+12.5%</span>
+                </div>
+                <div class="bar-chart" aria-label="Revenue overview chart">
+                  <span style="--h: 42%"></span>
+                  <span style="--h: 55%"></span>
+                  <span style="--h: 64%"></span>
+                  <span style="--h: 80%"></span>
+                  <span style="--h: 68%"></span>
+                  <span style="--h: 90%"></span>
+                  <span style="--h: 100%"></span>
+                </div>
+                <div class="chart-labels">
+                  <span>Jan</span>
+                  <span>Feb</span>
+                  <span>Mar</span>
+                  <span>Apr</span>
+                  <span>May</span>
+                  <span>Jun</span>
+                  <span>Jul</span>
+                </div>
+              </div>
+
+              <div class="metric-stack">
+                <div class="mini-stat">
+                  <label>Receivables</label>
+                  <strong id="dashboardReceivables">Rs 0</strong>
+                </div>
+                <div class="mini-stat">
+                  <label>Supplier payables</label>
+                  <strong id="dashboardPayables">Rs 0</strong>
+                </div>
+                <div class="mini-stat">
+                  <label>Customer Count</label>
+                  <strong id="customersValueSecondary">0</strong>
+                </div>
+                <div class="mini-stat">
+                  <label>Inventory units</label>
+                  <strong id="dashboardInventoryUnits">0</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+
+          <div class="operations-section">
+            <div class="section-heading">
+              <p class="section-kicker">Core operations</p>
+              <h3>The daily work of a water business, in one system</h3>
+            </div>
+            <div class="operations-grid">
+              <div class="ops-card">
+                <h4>Customer & Sales</h4>
+                <p>Keep every customer, order and account connected from a single operational view.</p>
+              </div>
+              <div class="ops-card">
+                <h4>Delivery Operations</h4>
+                <p>Turn service areas into planned sequences and route every drop with confidence.</p>
+              </div>
+              <div class="ops-card">
+                <h4>Billing & Collections</h4>
+                <p>Know what was billed, paid and still outstanding across every account.</p>
+              </div>
+              <div class="ops-card">
+                <h4>Coupon Books</h4>
+                <p>Control the complete coupon-book lifecycle from issue to settlement.</p>
+              </div>
+              <div class="ops-card">
+                <h4>Inventory & Production</h4>
+                <p>Track bottles, stock, refills, empties, damage and return flows in one place.</p>
+              </div>
+              <div class="ops-card">
+                <h4>Vehicle & Fuel</h4>
+                <p>Manage vehicle assignment, trip planning and fuel cost visibility in real time.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-grid">
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Low Stock</h2>
+                <span class="mini-badge">Alert</span>
+              </div>
+              <ul id="lowStockList" class="plain-list"></ul>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Recent Sales</h2>
+                <span class="mini-badge">Last 5</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="salesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <section class="tab" id="assistant">
+          <div class="panel assistant-hero">
+            <div><p class="section-kicker">Company-scoped intelligence</p><h2>AI Business Assistant</h2><p class="muted">Insights are generated from recorded company data only. Provider status is shown explicitly; no unconfigured provider is called.</p></div>
+            <span id="assistantProviderStatus" class="tag neutral">Loading provider status…</span>
+          </div>
+          <div class="assistant-grid">
+            <div class="panel"><div class="panel-header"><h3>Ask about this company</h3><button id="refreshAssistant" class="action-btn" type="button">Refresh</button></div><form id="assistantForm" class="stack-form"><textarea id="assistantMessage" rows="3" maxlength="4000" placeholder="Ask for a recorded operational snapshot…" required></textarea><button type="submit">Get deterministic answer</button></form><div id="assistantInsights" class="assistant-insights"></div></div>
+            <div class="panel"><div class="panel-header"><h3>Pending actions</h3><span class="tag warning">Approval required</span></div><div id="assistantActions" class="assistant-actions"><p class="muted">No actions loaded.</p></div></div>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Automation execution log</h3><button id="refreshAutomationLog" class="action-btn" type="button">Refresh</button></div><div class="table-scroll"><table><thead><tr><th>Rule</th><th>Status</th><th>Idempotency key</th><th>Started</th></tr></thead><tbody id="automationLogBody"><tr><td colspan="4">No executions loaded.</td></tr></tbody></table></div></div>
+          <div class="panel"><div class="panel-header"><h3>Notification delivery status</h3><span class="tag neutral">Provider-agnostic</span></div><p class="muted">In-app delivery is recorded locally. Email, WhatsApp, and SMS remain provider-not-configured until an adapter is configured.</p><div id="notificationLog" class="assistant-actions"><p class="muted">No delivery logs loaded.</p></div></div>
+          <div class="panel"><div class="panel-header"><h3>WhatsApp customer assistant</h3><button id="refreshWhatsApp" class="action-btn" type="button">Refresh</button></div><p id="whatsappProviderStatus" class="muted">Loading provider status…</p><p class="muted">Inbound messages require a verified company webhook signature and an exact company-scoped customer phone match. Supported intents include orders, status, balance, invoices/payments, bottle pickup, subscriptions, complaints, and human escalation.</p><div id="whatsappConversations" class="assistant-actions"><p class="muted">No conversations loaded.</p></div></div>
+        </section>
+
+        <section class="tab" id="products">
+          <div class="panel">
+            <h2 id="productFormTitle">Add Product</h2>
+            <form id="productForm" class="stack-form">
+              <input type="hidden" id="editingProductId" />
+              <div class="field-row two-col">
+                <input type="text" id="productName" placeholder="Product name e.g. TEMO 19L Bottle" title="Enter the product name, for example TEMO 19L Bottle" required />
+                <input type="text" id="productCategory" placeholder="Category e.g. Bottled Water" title="Enter a category, for example Bottled Water" />
+              </div>
+              <div class="field-row two-col">
+                <input type="number" id="purchasePrice" placeholder="Purchase rate e.g. 420" title="Enter your buying rate in PKR, for example 420" step="0.01" required />
+                <input type="number" id="salePrice" placeholder="Sale rate e.g. 550" title="Enter your customer sale rate in PKR, for example 550" step="0.01" required />
+              </div>
+              <div class="field-row one-col">
+                <input type="number" id="productStock" placeholder="Stock quantity e.g. 35" title="Enter available stock units, for example 35" min="0" required />
+              </div>
+              <div class="form-actions">
+                <button id="productSubmitButton" type="submit">Save Product</button>
+                <button id="cancelProductEdit" class="action-btn hidden" type="button">Cancel Edit</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <h2>Products</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                    <th>Purchase Rate</th>
+                    <th>Sale Rate</th>
+                    <th>Stock Units</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="productTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="sales">
+          <div class="panel">
+            <h2>New Sale</h2>
+            <form id="saleForm" class="stack-form">
+              <div class="field-row one-col">
+                <input type="text" id="customerName" placeholder="Customer name e.g. Ali Khan" required />
+              </div>
+              <div class="field-row two-col">
+                <select id="saleProduct"></select>
+                <input type="number" id="saleQty" placeholder="Quantity e.g. 2" min="1" value="1" required />
+              </div>
+              <button type="submit">Create Sale</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2>Invoice Preview</h2>
+            <div id="invoicePreviewEmpty">No invoice generated yet.</div>
+            <div id="invoicePreview" class="invoice-preview hidden">
+              <div class="invoice-header">
+                <div>
+                  <h3 id="invoiceCompanyName">Company</h3>
+                  <p>Business Invoice</p>
+                  <p class="invoice-contact" id="invoiceCompanyContact"></p>
+                </div>
+                <div class="invoice-meta">
+                  <p><strong>Invoice #:</strong> <span id="invoiceNumber">-</span></p>
+                  <p><strong>Date:</strong> <span id="invoiceDate">-</span></p>
+                </div>
+              </div>
+
+              <div class="invoice-customer">
+                <p><strong>Customer:</strong> <span id="invoiceCustomer">-</span><br><small class="invoice-contact" id="invoiceCustomerContact"></small></p>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="invoiceDetailBody"></tbody>
+              </table>
+
+              <div class="invoice-total">
+                <strong>Total:</strong>
+                <span id="invoiceTotal">$0.00</span>
+              </div>
+
+              <button id="printInvoiceBtn" type="button">Print / Save as PDF</button>
+              <small class="invoice-print-note">Opens a print-friendly view. Choose “Save as PDF” in your browser's print dialog.</small>
+            </div>
+          </div>
+
+          <div class="panel table-panel">
+            <h2>Sales List</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Invoice</th>
+                </tr>
+              </thead>
+              <tbody id="allSalesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="orders">
+          <div class="panel">
+            <h2>Create delivery order</h2>
+            <form id="orderForm" class="stack-form">
+              <div class="field-row two-col">
+                <select id="orderCustomer" required><option value="">Select customer</option></select>
+                <input id="orderAddress" placeholder="Delivery address (optional)" />
+              </div>
+              <div class="field-row two-col">
+                <select id="orderProduct" required></select>
+                <input id="orderQuantity" type="number" min="1" step="1" value="1" placeholder="Quantity" required />
+              </div>
+              <input id="orderNotes" placeholder="Delivery notes (optional)" />
+              <button type="submit">Create order</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2>Assign delivery</h2>
+            <form id="deliveryForm" class="stack-form">
+              <div class="field-row two-col">
+                <select id="deliveryOrder" required><option value="">Select order</option></select>
+                <select id="deliveryDriver" required><option value="">Select driver</option></select>
+              </div>
+              <input id="deliveryNotes" placeholder="Assignment notes (optional)" />
+              <button type="submit">Assign driver</button>
+            </form>
+          </div>
+          <div id="route-planner-panel" class="panel route-planner-panel">
+            <div class="panel-header"><div><p class="section-kicker">Deterministic route planning</p><h2>AI route optimization foundation</h2><p class="login-helper">Provider-agnostic ordering only; no external map or AI calls.</p></div><button id="refreshRoutes" class="action-btn" type="button">Refresh</button></div>
+            <div class="field-row three-col"><label>Route date<input id="routeDate" type="date" /></label><label>Driver<select id="routeDriver"><option value="">Unassigned</option></select></label><label>Area<input id="routeArea" placeholder="Optional area filter" /></label></div>
+            <div id="routeCandidateList" class="route-candidate-list"></div>
+                        <div class="heatmap-panel"><div class="panel-header"><div><h3>Delivery heatmap</h3><p id="heatmapStatus" class="muted">Uses recorded customer coordinates only.</p></div><button id="refreshHeatmap" class="action-btn" type="button">Refresh heatmap</button></div><div id="deliveryHeatmap" class="delivery-heatmap"><p class="muted">No heatmap loaded.</p></div></div>
+                        <button id="createRoute" type="button">Create optimized route</button>
+            <div id="routeList" class="route-list"></div>
+            <div id="routeDetail" class="route-detail"></div>
+          </div>
+          <div class="panel table-panel">
+            <div class="panel-header"><h2>Orders and delivery status</h2><button id="refreshOrders" class="action-btn" type="button">Refresh</button></div>
+            <table>
+              <thead><tr><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Driver</th><th>Update</th></tr></thead>
+              <tbody id="ordersTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="driverMode">
+          <div class="dashboard-header">
+            <div><p class="section-kicker">Mobile delivery workflow</p><h2>My delivery route</h2><p class="login-helper">Use the cards below to update only deliveries assigned to you.</p></div>
+            <div class="driver-filters"><label>Date <input id="driverDate" type="date" /></label><button id="refreshDriverMode" class="action-btn" type="button">Refresh</button></div>
+          </div>
+          <div id="driverRouteList" class="route-list"></div>
+          <div id="driverDeliveryList" class="driver-delivery-list"></div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Delivery history</h2><button id="refreshDriverHistory" class="action-btn" type="button">Refresh</button></div><div id="driverHistoryList" class="driver-history-list"></div></div>
+        </section>
+
+        <section class="tab" id="deliverySubscriptions">
+          <div class="panel">
+            <div class="panel-header"><div><p class="section-kicker">Scheduled orders</p><h2>Recurring delivery subscription</h2></div><button id="generateSubscriptionOrders" class="action-btn" type="button">Generate due orders</button></div>
+            <form id="deliverySubscriptionForm" class="stack-form">
+              <div class="field-row two-col"><select id="subscriptionCustomer" required><option value="">Select customer</option></select><select id="subscriptionProduct" required><option value="">Select product</option></select></div>
+              <div class="field-row three-col"><input id="subscriptionQuantity" type="number" min="1" step="1" value="1" placeholder="Quantity" required /><input id="subscriptionPrice" type="number" min="0" step="0.01" placeholder="Unit price (optional)" /><select id="subscriptionFrequency" required><option value="daily">Daily</option><option value="alternate_days">Every other day</option><option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div>
+              <div id="customFrequencyFields" class="field-row two-col hidden"><input id="subscriptionCustomInterval" type="number" min="1" step="1" value="1" placeholder="Every..." /><select id="subscriptionCustomUnit"><option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option></select></div>
+              <div class="field-row two-col"><label>Start date<input id="subscriptionStartDate" type="date" required /></label><label>End date (optional)<input id="subscriptionEndDate" type="date" /></label></div>
+              <input id="subscriptionAddress" placeholder="Delivery address (optional)" /><input id="subscriptionNotes" placeholder="Notes (optional)" /><button type="submit">Create subscription</button>
+            </form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Subscriptions</h2><button id="refreshSubscriptions" class="action-btn" type="button">Refresh</button></div><table><thead><tr><th>Customer</th><th>Product</th><th>Schedule</th><th>Next due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="subscriptionsTableBody"></tbody></table></div>
+        </section>
+
+        <section class="tab" id="bottles">
+          <div class="panel">
+            <h2>Bottle and container tracking</h2>
+            <form id="bottleForm" class="stack-form">
+              <div class="field-row two-col">
+                <input type="text" id="bottleName" placeholder="Bottle type e.g. 19L Returnable" required />
+                <input type="text" id="bottleCode" placeholder="Code e.g. B19" required />
+              </div>
+              <div class="field-row two-col">
+                <input type="number" id="bottleCapacity" min="0.1" step="0.1" placeholder="Capacity (litres)" required />
+                <select id="bottleType"><option value="returnable">Returnable</option><option value="disposable">Disposable</option></select>
+              </div>
+              <div class="field-row three-col">
+                <input type="text" id="bottleIdentifier" placeholder="Bottle ID (optional)" />
+                <input type="text" id="bottleBarcode" placeholder="Barcode (optional)" />
+                <input type="text" id="bottleQrCode" placeholder="QR code (optional)" />
+              </div>
+              <button type="submit">Add bottle type</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2>Record bottle movement</h2>
+            <form id="bottleMovementForm" class="stack-form">
+              <div class="field-row two-col">
+                <select id="bottleMovementBottle" required></select>
+                <select id="bottleMovementType" required>
+                  <option value="received">Received</option><option value="dispatched">Dispatched to customer</option><option value="returned">Returned by customer</option><option value="driver_dispatched">Issued to driver</option><option value="driver_returned">Returned by driver</option><option value="damaged">Damaged</option><option value="lost">Lost</option><option value="adjustment_in">Adjustment in</option><option value="adjustment_out">Adjustment out</option>
+                </select>
+              </div>
+              <div class="field-row two-col">
+                <select id="bottleMovementCustomer"><option value="">No customer</option></select>
+                <select id="bottleMovementDriver"><option value="">No driver</option></select>
+                <input type="number" id="bottleMovementQuantity" min="1" step="1" placeholder="Quantity" required />
+              </div>
+              <input type="text" id="bottleMovementReference" placeholder="Reference (optional)" />
+              <button type="submit">Save movement</button>
+            </form>
+          </div>
+          <div class="panel table-panel">
+            <h2>Bottle balances</h2>
+            <table><thead><tr><th>Type</th><th>Code</th><th>Capacity</th><th>Available</th><th>Customer-held</th></tr></thead><tbody id="bottleBalanceTableBody"></tbody></table>
+          </div>
+          <div class="panel table-panel">
+            <div class="panel-header"><h2>Deposit reconciliation report</h2><a class="action-btn" href="/api/bottle-reconciliation/export" target="_blank" rel="noreferrer">Export CSV</a></div>
+            <p class="muted-label">Balances are calculated from bottle movements and linked delivery bottle counts; no quantities are inferred.</p>
+            <table><thead><tr><th>Bottle</th><th>ID / barcode</th><th>Warehouse / available</th><th>Customer-held</th><th>Driver-held</th><th>Damaged</th><th>Lost</th><th>Delivery returns</th></tr></thead><tbody id="bottleReconciliationTableBody"></tbody></table>
+          </div>
+          <div class="panel table-panel">
+            <h2>Recent movements</h2>
+            <table><thead><tr><th>Bottle</th><th>Movement</th><th>Qty</th><th>Customer</th><th>Date</th></tr></thead><tbody id="bottleMovementTableBody"></tbody></table>
+          </div>
+        </section>
+
+        <section class="tab" id="customers">
+          <div class="panel">
+            <h2>Add Customer</h2>
+            <form id="customerForm" class="stack-form">
+              <div class="field-row two-col">
+                <input type="text" id="customerNameInput" placeholder="Customer name e.g. Ali Khan" required />
+                <input type="text" id="customerPhone" placeholder="Phone e.g. 0300-1111111" />
+              </div>
+              <div class="field-row two-col">
+                <input type="text" id="customerAddress" placeholder="Address e.g. F-8 Islamabad" />
+                <input type="text" id="customerArea" placeholder="Area / zone (optional)" />
+              </div>
+              <div class="field-row two-col">
+                <input type="number" id="customerLatitude" min="-90" max="90" step="any" placeholder="Latitude (optional)" />
+                <input type="number" id="customerLongitude" min="-180" max="180" step="any" placeholder="Longitude (optional)" />
+              </div>
+              <button type="submit">Save Customer</button>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <div class="panel-header"><div><h2>Customers</h2><p class="login-helper">Use recorded orders to see reorder readiness. No synthetic estimates are shown.</p></div><button id="refreshReorderAnalytics" class="action-btn" type="button">Refresh reorder insights</button></div>
+            <table>
+              <thead><tr><th>Name</th><th>Phone</th><th>Address</th><th>Smart reorder</th></tr></thead>
+              <tbody id="customerTableBody"></tbody>
+            </table>
+          </div>
+          <div id="customerReorderPanel" class="panel hidden">
+            <div class="panel-header"><div><h2 id="customerReorderTitle">Reorder insights</h2><p id="customerReorderStatus" class="login-helper"></p></div><button id="closeCustomerReorder" class="action-btn" type="button">Close</button></div>
+            <div class="table-scroll"><table><thead><tr><th>Product</th><th>Orders</th><th>Avg consumption</th><th>Last order</th><th>Avg interval</th><th>Expected next</th><th>Suggested qty</th><th>Action</th></tr></thead><tbody id="customerReorderBody"></tbody></table></div>
+          </div>
+        </section>
+
+        <section class="tab" id="qrCodes">
+          <div class="dashboard-header"><div><p class="section-kicker">Traceability</p><h2>Customer QR system</h2><p class="login-helper">Generate company-scoped QR records for existing customers, bottles, products, orders, and deliveries. Every authorized lookup is recorded.</p></div><button id="refreshQrRecords" class="action-btn" type="button">Refresh</button></div>
+          <div class="panel">
+            <h3>Generate or open a QR record</h3>
+            <form id="qrGenerateForm" class="stack-form"><div class="field-row two-col"><select id="qrEntityType"><option value="customer">Customer</option><option value="bottle">Bottle</option><option value="product">Product</option><option value="order">Order</option><option value="delivery">Delivery</option></select><select id="qrEntityId" required></select></div><button type="submit">Generate QR</button></form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h3>QR records</h3><span id="qrRecordSummary" class="mini-badge">0 records</span></div><div class="table-scroll"><table><thead><tr><th>Type</th><th>Record</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="qrRecordTableBody"></tbody></table></div></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Authorized lookup history</h3><button id="refreshQrHistory" class="action-btn" type="button">Refresh history</button></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Type</th><th>Record</th><th>User</th><th>Result</th></tr></thead><tbody id="qrHistoryTableBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="fleet">
+          <div class="dashboard-header">
+            <div><p class="section-kicker">Transport operations</p><h2>Fleet management</h2><p class="login-helper">Track vehicles, compliance dates, service history, and assigned drivers for this company.</p></div>
+            <button id="refreshVehicles" class="action-btn" type="button">Refresh</button>
+          </div>
+          <div id="fleetFormPanel" class="panel">
+            <h2>Add vehicle</h2>
+            <form id="vehicleForm" class="stack-form">
+              <div class="field-row three-col"><input id="vehicleNumber" maxlength="60" placeholder="Vehicle number e.g. ABC-123" required /><input id="vehicleRegistration" maxlength="100" placeholder="Registration details" /><input id="vehicleType" maxlength="80" placeholder="Vehicle type e.g. Delivery van" required /></div>
+              <div class="field-row three-col"><input id="vehicleCapacity" type="number" min="0.01" step="0.01" placeholder="Capacity" required /></div>
+              <div class="field-row three-col"><select id="vehicleFuelType" required><option value="">Fuel type</option><option value="petrol">Petrol</option><option value="diesel">Diesel</option><option value="cng">CNG</option><option value="electric">Electric</option><option value="hybrid">Hybrid</option><option value="other">Other</option></select><input id="vehicleMileage" type="number" min="0" step="0.1" placeholder="Mileage" value="0" /><select id="vehicleDriver"><option value="">Unassigned driver</option></select></div>
+              <div class="field-row three-col"><label>Next maintenance<input id="vehicleMaintenanceDate" type="date" /></label><label>Insurance expiry<input id="vehicleInsuranceExpiry" type="date" /></label><label>Registration expiry<input id="vehicleRegistrationExpiry" type="date" /></label></div>
+              <textarea id="vehicleServiceHistory" maxlength="10000" rows="3" placeholder="Service history and notes"></textarea>
+              <div class="field-row two-col"><select id="vehicleStatus"><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option><option value="retired">Retired</option></select><button type="submit">Add vehicle</button></div>
+            </form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Company vehicles</h2><select id="vehicleStatusFilter"><option value="">All statuses</option><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option><option value="retired">Retired</option></select></div><div class="table-scroll"><table><thead><tr><th>Vehicle</th><th>Type</th><th>Capacity</th><th>Fuel</th><th>Mileage</th><th>Driver</th><th>Compliance</th><th>Status</th><th>Actions</th></tr></thead><tbody id="vehiclesTableBody"></tbody></table></div></div>
+          <div class="fleet-grid">
+            <div class="panel"><h3>Service & fuel entry</h3><form id="fleetServiceForm" class="stack-form"><select id="fleetServiceVehicle" required><option value="">Vehicle</option></select><div class="field-row two-col"><input id="fleetServiceDate" type="date" required><input id="fleetServiceType" placeholder="Service type" required></div><div class="field-row three-col"><input id="fleetServiceOdometer" type="number" min="0" placeholder="Odometer" required><input id="fleetServiceCost" type="number" min="0" step="0.01" placeholder="Cost" required><input id="fleetServiceProvider" placeholder="Provider"></div><button type="submit">Record service</button></form><form id="fleetFuelForm" class="stack-form"><select id="fleetFuelVehicle" required><option value="">Vehicle</option></select><div class="field-row two-col"><input id="fleetFuelDate" type="date" required><input id="fleetFuelQuantity" type="number" min="0.01" step="0.01" placeholder="Quantity" required></div><div class="field-row three-col"><input id="fleetFuelUnitCost" type="number" min="0" step="0.01" placeholder="Unit cost" required><input id="fleetFuelOdometer" type="number" min="0" placeholder="Odometer" required><input id="fleetFuelStation" placeholder="Station"></div><button type="submit">Record fuel</button></form></div>
+            <div class="panel"><h3>Equipment / assets</h3><form id="equipmentForm" class="stack-form"><div class="field-row two-col"><input id="equipmentTag" placeholder="Asset tag" required><input id="equipmentName" placeholder="Asset name" required></div><div class="field-row two-col"><input id="equipmentType" placeholder="Type"><input id="equipmentSerial" placeholder="Serial number"></div><div class="field-row three-col"><input id="equipmentLocation" placeholder="Location"><input id="equipmentPurchaseDate" type="date"><select id="equipmentStatus"><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option><option value="retired">Retired</option><option value="lost">Lost</option></select></div><div class="field-row two-col"><input id="equipmentCost" type="number" min="0" step="0.01" placeholder="Purchase cost"><input id="equipmentValue" type="number" min="0" step="0.01" placeholder="Current value"></div><button type="submit">Add asset</button></form><div class="table-scroll"><table><thead><tr><th>Tag</th><th>Asset</th><th>Location</th><th>Value</th><th>Status</th></tr></thead><tbody id="equipmentTableBody"></tbody></table></div></div>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Maintenance history</h3><button id="refreshFleetExpansion" class="action-btn" type="button">Refresh fleet records</button></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Vehicle</th><th>Service</th><th>Provider</th><th>Cost</th></tr></thead><tbody id="fleetServiceTableBody"></tbody></table></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Vehicle</th><th>Quantity</th><th>Unit cost</th><th>Total</th></tr></thead><tbody id="fleetFuelTableBody"></tbody></table></div></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Expiry alerts</h3><button id="refreshFleetAlerts" class="action-btn" type="button">Refresh alerts</button></div><div id="fleetAlerts" class="alert-list">No upcoming expiries.</div></div>
+        </section>
+
+        <section class="tab" id="employees">
+          <div class="dashboard-header">
+            <div><p class="section-kicker">People operations</p><h2>Employees</h2><p class="login-helper">Manage company staff without creating duplicate login accounts. Link an existing user when access is required.</p></div>
+            <button id="refreshEmployees" class="action-btn" type="button">Refresh</button>
+          </div>
+          <div id="employeeFormPanel" class="panel">
+            <h2>Add employee</h2>
+            <form id="employeeForm" class="stack-form">
+              <input type="hidden" id="editingEmployeeId" />
+              <div class="field-row three-col"><input id="employeeIdInput" maxlength="60" placeholder="Employee ID e.g. EMP-001" required /><input id="employeeFullName" maxlength="160" placeholder="Full name" required /><input id="employeeDepartment" maxlength="100" placeholder="Department" /></div>
+              <div class="field-row three-col"><input id="employeeRole" maxlength="100" placeholder="Role / designation" /><input id="employeeSalary" type="number" min="0" step="0.01" placeholder="Monthly salary" value="0" /><select id="employeeUser"><option value="">No login account</option></select></div>
+              <div class="field-row three-col"><input id="employeePhone" maxlength="40" placeholder="Phone" /><input id="employeeEmail" type="email" maxlength="160" placeholder="Email" /><label>Hire date<input id="employeeHireDate" type="date" /></label></div>
+              <div class="field-row three-col"><input id="employeeAttendanceDays" type="number" min="0" step="1" value="0" placeholder="Attendance days" /><input id="employeePresentDays" type="number" min="0" step="1" value="0" placeholder="Present days" /><input id="employeeLeaveBalance" type="number" min="0" step="1" value="0" placeholder="Leave balance" /></div>
+              <textarea id="employeeNotes" maxlength="5000" rows="2" placeholder="Notes"></textarea>
+              <div class="field-row two-col"><select id="employeeStatus"><option value="active">Active</option><option value="inactive">Inactive</option><option value="on_leave">On leave</option><option value="terminated">Terminated</option></select><div class="form-actions"><button id="employeeSubmitButton" type="submit">Save employee</button><button id="cancelEmployeeEdit" class="action-btn hidden" type="button">Cancel edit</button></div></div>
+            </form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Company employees</h2><select id="employeeStatusFilter"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="on_leave">On leave</option><option value="terminated">Terminated</option></select></div><div class="table-scroll"><table><thead><tr><th>Employee ID</th><th>Name</th><th>Department / role</th><th>Contact</th><th>Salary</th><th>Attendance</th><th>Leave balance</th><th>Linked user</th><th>Status</th><th>Action</th></tr></thead><tbody id="employeesTableBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="attendance">
+          <div class="dashboard-header"><div><p class="section-kicker">Time tracking</p><h2>Attendance</h2><p class="login-helper">Record check-in and check-out times for company employees. Records are isolated to the active company.</p></div><button id="refreshAttendance" class="action-btn" type="button">Refresh</button></div>
+          <div class="panel"><form id="attendanceForm" class="stack-form"><div class="field-row three-col"><select id="attendanceEmployee"><option value="">My linked employee</option></select><input id="attendanceDate" type="date" required><select id="attendanceStatus"><option value="present">Present</option><option value="late">Late</option><option value="half_day">Half day</option><option value="leave">Leave</option></select></div><div class="form-actions"><button id="checkInButton" type="button">Check in</button><button id="checkOutButton" class="action-btn" type="button">Check out</button></div></form></div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Attendance records</h2><div class="field-row"><input id="attendanceStart" type="date"><input id="attendanceEnd" type="date"></div></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Employee</th><th>Status</th><th>Check in</th><th>Check out</th></tr></thead><tbody id="attendanceTableBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="payroll">
+          <div class="dashboard-header"><div><p class="section-kicker">Compensation</p><h2>Payroll</h2><p class="login-helper">Run a company-scoped payroll period from active employee salary records and review generated payslips.</p></div><button id="refreshPayroll" class="action-btn" type="button">Refresh</button></div>
+          <div id="payrollFormPanel" class="panel"><h2>Run payroll</h2><form id="payrollForm" class="stack-form"><div class="field-row two-col"><label>Period start<input id="payrollStart" type="date" required></label><label>Period end<input id="payrollEnd" type="date" required></label></div><textarea id="payrollNotes" maxlength="1000" rows="2" placeholder="Run notes (optional)"></textarea><button type="submit">Run payroll</button></form></div>
+          <div class="panel table-panel"><h2>Payroll runs</h2><div class="table-scroll"><table><thead><tr><th>Period</th><th>Status</th><th>Payslips</th><th>Total net</th><th>Created</th><th>Action</th></tr></thead><tbody id="payrollTableBody"></tbody></table></div></div>
+          <div class="panel table-panel hidden" id="payslipsPanel"><div class="panel-header"><h2>Payslips</h2><button id="closePayslips" class="action-btn" type="button">Close</button></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Gross</th><th>Deductions</th><th>Net</th><th>Payment</th></tr></thead><tbody id="payslipsTableBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="complaints">
+          <div class="panel">
+            <div class="panel-header"><div><p class="section-kicker">Customer care</p><h2>Log a complaint</h2></div><button id="refreshComplaints" class="action-btn" type="button">Refresh</button></div>
+            <form id="complaintForm" class="stack-form">
+              <div class="field-row two-col"><input id="complaintTitle" maxlength="160" placeholder="Issue title" required /><select id="complaintCustomer"><option value="">Select customer (optional)</option></select></div>
+              <div class="field-row two-col"><select id="complaintPriority"><option value="normal">Normal priority</option><option value="low">Low priority</option><option value="high">High priority</option><option value="urgent">Urgent</option></select><textarea id="complaintDescription" maxlength="5000" rows="4" placeholder="Describe the complaint" required></textarea></div>
+              <button type="submit">Create complaint</button>
+            </form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Complaints</h2><select id="complaintStatusFilter"><option value="">All statuses</option><option value="open">Open</option><option value="assigned">Assigned</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select></div><div class="complaints-list" id="complaintsList"></div></div>
+        </section>
+
+        <section class="tab" id="suppliers">
+          <div class="panel">
+            <h2>Add Supplier</h2>
+            <form id="supplierForm" class="stack-form">
+              <div class="field-row two-col">
+                <input type="text" id="supplierNameInput" placeholder="Supplier name e.g. Aqua Supplies" required />
+                <input type="text" id="supplierPhone" placeholder="Phone e.g. 0300-3333333" />
+              </div>
+              <div class="field-row one-col">
+                <input type="text" id="supplierAddress" placeholder="Address e.g. Rawalpindi" />
+              </div>
+              <button type="submit">Save Supplier</button>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <h2>Suppliers</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Address</th>
+                </tr>
+              </thead>
+              <tbody id="supplierTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="procurement">
+          <div class="dashboard-header">
+            <div><p class="section-kicker">Private tenant workspace</p><h2>Supplier & Procurement Marketplace</h2><p class="login-helper">Compare authorized supplier offers, issue purchase orders, track invoices, and manage contract expiry. This workspace is private to the selected company.</p></div>
+            <button id="procurementRefresh" class="action-btn" type="button">Refresh</button>
+          </div>
+          <div class="report-kpi-grid" id="procurementKpis">
+            <div class="report-kpi"><span>Suppliers</span><strong id="procurementSupplierCount">0</strong><small>Tenant records</small></div>
+            <div class="report-kpi"><span>Open purchase orders</span><strong id="procurementOpenOrderCount">0</strong><small>Not received or cancelled</small></div>
+            <div class="report-kpi"><span>Outstanding balance</span><strong id="procurementOutstanding">Rs 0</strong><small>Supplier invoices</small></div>
+            <div class="report-kpi"><span>Contracts expiring</span><strong id="procurementExpiringContracts">0</strong><small>Next 90 days</small></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div><h2>Supplier contact & category</h2><p class="muted-label">Create only records you have authorized for this tenant.</p></div></div>
+            <form id="procurementSupplierForm" class="stack-form">
+              <div class="field-row three-col"><input id="procurementSupplierName" maxlength="160" placeholder="Supplier name" required /><input id="procurementSupplierEmail" type="email" placeholder="Business email" /><input id="procurementSupplierPhone" placeholder="Phone" /></div>
+              <div class="field-row three-col"><input id="procurementSupplierAddress" placeholder="Address" /><input id="procurementSupplierTaxId" placeholder="Tax / registration ID" /><input id="procurementSupplierTerms" type="number" min="0" max="3650" value="0" placeholder="Payment terms (days)" /></div>
+              <input id="procurementSupplierNotes" maxlength="2000" placeholder="Notes (optional)" />
+              <button type="submit">Add supplier</button>
+            </form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Supplier directory</h2><span class="mini-badge">Tenant-scoped</span></div><div class="table-scroll"><table><thead><tr><th>Supplier</th><th>Contact</th><th>Categories</th><th>Rating</th><th>Outstanding</th></tr></thead><tbody id="procurementSupplierBody"></tbody></table></div></div>
+          <div class="panel">
+            <div class="panel-header"><div><h2>Request quotation</h2><p class="muted-label">Use an existing product or describe a supplier item.</p></div></div>
+            <form id="procurementQuotationForm" class="stack-form">
+              <div class="field-row three-col"><select id="procurementQuotationSupplier" required><option value="">Select supplier</option></select><input id="procurementQuotationNumber" maxlength="80" placeholder="Quotation number (optional)" /><input id="procurementQuotationValidUntil" type="date" /></div>
+              <div class="field-row three-col"><input id="procurementQuotationDescription" maxlength="240" placeholder="Line description" required /><input id="procurementQuotationQuantity" type="number" min="0.01" step="0.01" value="1" placeholder="Quantity" required /><input id="procurementQuotationUnitPrice" type="number" min="0" step="0.01" placeholder="Unit price" required /></div>
+              <button type="submit">Save quotation</button>
+            </form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Quotations & comparison</h2><button id="procurementCompare" class="action-btn" type="button">Compare selected</button></div><div class="table-scroll"><table><thead><tr><th></th><th>Number</th><th>Supplier</th><th>Status</th><th>Total</th><th>Valid until</th></tr></thead><tbody id="procurementQuotationBody"></tbody></table></div><p id="procurementComparisonResult" class="muted-label"></p></div>
+          <div class="panel">
+            <div class="panel-header"><div><h2>Supplier invoice & payment</h2><p class="muted-label">Balances are updated from authorized supplier payments.</p></div></div>
+            <form id="procurementInvoiceForm" class="stack-form"><div class="field-row four-col"><select id="procurementInvoiceSupplier" required><option value="">Select supplier</option></select><input id="procurementInvoiceNumber" maxlength="80" placeholder="Invoice number" required /><input id="procurementInvoiceTotal" type="number" min="0.01" step="0.01" placeholder="Total" required /><input id="procurementInvoiceDueDate" type="date" /></div><button type="submit">Record invoice</button></form>
+            <form id="procurementPaymentForm" class="stack-form"><div class="field-row four-col"><select id="procurementPaymentInvoice" required><option value="">Select outstanding invoice</option></select><input id="procurementPaymentAmount" type="number" min="0.01" step="0.01" placeholder="Payment amount" required /><select id="procurementPaymentMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Card</option><option>Other</option></select><input id="procurementPaymentReference" maxlength="120" placeholder="Reference" /></div><button type="submit">Record supplier payment</button></form>
+          </div>
+          <div class="panel table-panel"><div class="panel-header"><h2>Purchase orders & contract expiry</h2><span class="mini-badge">No public listings</span></div><div class="table-scroll"><table><thead><tr><th>PO</th><th>Supplier</th><th>Status</th><th>Total</th><th>Expected</th></tr></thead><tbody id="procurementOrderBody"></tbody></table></div><div class="table-scroll"><table><thead><tr><th>Contract</th><th>Supplier</th><th>Expires</th><th>Status</th></tr></thead><tbody id="procurementContractBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="purchases">
+          <div class="panel">
+            <h2>New Purchase</h2>
+            <form id="purchaseForm" class="stack-form">
+              <div class="field-row two-col">
+                <input type="text" id="supplierName" placeholder="Supplier name e.g. Aqua Supplies" required />
+                <select id="purchaseProduct"></select>
+              </div>
+              <div class="field-row two-col">
+                <input type="number" id="purchaseQty" placeholder="Quantity e.g. 50" min="1" value="1" required />
+                <input type="number" id="purchaseUnitPrice" placeholder="Unit purchase rate e.g. 420" step="0.01" required />
+              </div>
+              <button type="submit">Create Purchase</button>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <h2>Purchases</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="purchaseTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="expenses">
+          <div class="panel">
+            <h2>Add Expense</h2>
+            <form id="expenseForm" class="stack-form">
+              <div class="field-row two-col">
+                <input type="text" id="expenseTitle" placeholder="Expense title e.g. Fuel" required />
+                <input type="text" id="expenseCategory" placeholder="Category e.g. Delivery" />
+              </div>
+              <div class="field-row one-col">
+                <input type="number" id="expenseAmount" placeholder="Amount in PKR e.g. 5000" step="0.01" required />
+              </div>
+              <button type="submit">Save Expense</button>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <h2>Expenses</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Category</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="expenseTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="payments">
+          <div class="panel">
+            <h2>Record Payment</h2>
+            <form id="paymentForm" class="stack-form">
+              <div class="field-row two-col">
+                <input type="text" id="paymentCustomer" placeholder="Customer name e.g. Ali Khan" required />
+                <input type="text" id="paymentSupplier" placeholder="Supplier name for payable payment" />
+              </div>
+              <div class="field-row two-col">
+                <input type="number" id="paymentAmount" placeholder="Amount in PKR e.g. 2500" step="0.01" required />
+                <select id="paymentMethod"><option>Cash</option><option>Bank Transfer</option><option>Cheque</option><option>Card</option><option>Other</option></select>
+              </div>
+              <div class="field-row two-col">
+                <select id="paymentDirection"><option value="receipt">Money received</option><option value="payment">Money paid</option></select>
+                <select id="paymentPartyType"><option value="customer">Customer</option><option value="supplier">Supplier</option></select>
+              </div>
+              <div class="field-row two-col">
+                <input type="text" id="paymentReference" placeholder="Invoice/reference e.g. INV-1001" />
+                <input type="date" id="paymentDueDate" />
+              </div>
+              <input type="text" id="paymentNote" placeholder="Note e.g. Monthly payment" />
+              <button type="submit">Save Payment</button>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <h2>Payments</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Method</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="paymentTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="tab" id="territories">
+          <div class="dashboard-header"><div><p class="section-kicker">Territory operations</p><h2>Areas & zones</h2><p class="login-helper">Manage company-scoped country, city, area, zone, sector and route records.</p></div><button id="refreshTerritories" class="action-btn" type="button">Refresh</button></div>
+          <div class="stats-grid territory-stats"><div class="card accent-blue"><span>Countries</span><strong id="territoryCountries">0</strong></div><div class="card accent-green"><span>Cities</span><strong id="territoryCities">0</strong></div><div class="card accent-orange"><span>Areas</span><strong id="territoryAreas">0</strong></div><div class="card accent-purple"><span>Zones / sectors</span><strong id="territoryZones">0</strong></div></div>
+          <div class="panel" id="territoryFormPanel"><div class="panel-header"><h3>Add territory</h3><span class="tag neutral">Manager access required</span></div><form id="territoryForm" class="field-row four-col"><select id="territoryLevel" required><option value="">Level</option><option>country</option><option>city</option><option>area</option><option>zone</option><option>sector</option><option>route</option></select><select id="territoryParent"><option value="">Parent</option></select><input id="territoryName" maxlength="120" placeholder="Name" required><input id="territoryCode" maxlength="40" placeholder="Code"><button type="submit">Add record</button></form></div>
+          <div class="panel"><div class="panel-header"><h3>Territory hierarchy</h3><input id="territoryFilter" placeholder="Filter name or level"></div><div class="table-scroll"><table><thead><tr><th>Level</th><th>Name</th><th>Parent</th><th>Customers</th><th>Drivers</th><th>Status</th><th>Action</th></tr></thead><tbody id="territoryTableBody"></tbody></table></div></div>
+          <div class="panel"><div class="panel-header"><h3>Customer and driver assignments</h3></div><div class="field-row three-col"><select id="territoryCustomer"><option value="">Customer</option></select><select id="territoryCustomerArea"><option value="">Assign customer to territory</option></select><button id="assignTerritoryCustomer" type="button">Assign customer</button></div><div class="field-row three-col"><select id="territoryDriver"><option value="">Driver</option></select><select id="territoryDriverArea"><option value="">Assign driver to territory</option></select><button id="assignTerritoryDriver" type="button">Assign driver</button></div></div>
+          <div class="panel"><div class="panel-header"><h3>Dashboard by area</h3><span class="mini-badge">Real customers and orders</span></div><div class="table-scroll"><table><thead><tr><th>Territory</th><th>Level</th><th>Customers</th><th>Drivers</th><th>Orders</th><th>Order value</th></tr></thead><tbody id="territorySummaryBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="crm">
+          <div class="section-heading"><p class="section-kicker">Customer relationships</p><h2>Loyalty, referrals & salesman CRM</h2><p>Live company data only. Points are earned from recorded sales and delivered orders.</p></div>
+          <div class="crm-grid">
+            <div class="panel table-panel"><div class="panel-header"><h3>Loyalty tiers & balances</h3><button id="refreshCrm" class="action-btn" type="button">Refresh</button></div><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Tier</th><th>Balance</th><th>Lifetime</th><th>Spend</th></tr></thead><tbody id="loyaltyTableBody"></tbody></table></div></div>
+            <div class="panel"><h3>Referral code</h3><form id="referralCodeForm" class="stack-form"><select id="referralCustomer" required><option value="">Select customer</option></select><input id="referralReward" type="number" min="0" max="10000" value="100" placeholder="Reward points"><button type="submit">Create / show code</button></form><p id="referralCodeResult" class="muted"></p><h3>Redeem referral</h3><form id="referralRedeemForm" class="stack-form"><input id="referralCode" placeholder="TEMO-XXXX" required><select id="referredCustomer" required><option value="">Referred customer</option></select><button type="submit">Redeem</button></form></div>
+            <div class="panel table-panel"><h3>Salesman assignments & performance</h3><form id="salesmanAssignmentForm" class="field-row three-col"><select id="assignmentCustomer" required><option value="">Customer</option></select><select id="assignmentSalesman" required><option value="">Salesman</option></select><button type="submit">Assign</button></form><div class="table-scroll"><table><thead><tr><th>Salesman</th><th>Customers</th><th>Activities</th><th>Sales value</th></tr></thead><tbody id="salesmanPerformanceBody"></tbody></table></div></div>
+            <div class="panel"><h3>Log activity</h3><form id="salesmanActivityForm" class="stack-form"><select id="activityCustomer"><option value="">Customer (optional)</option></select><select id="activityType" required><option value="call">Call</option><option value="visit">Visit</option><option value="message">Message</option><option value="follow_up">Follow-up</option><option value="note">Note</option></select><textarea id="activityNotes" maxlength="2000" rows="3" placeholder="Notes"></textarea><button type="submit">Save activity</button></form></div>
+          </div>
+        </section>
+
+        <section class="tab" id="creditPricing">
+          <div class="dashboard-header"><div><p class="section-kicker">Receivables & pricing</p><h2>Credit control and smart pricing</h2><p class="login-helper">Only recorded balances, configured price lists, and approval rules are shown.</p></div><button id="refreshCreditPricing" class="action-btn" type="button">Refresh</button></div>
+          <div class="panel"><h3>Company credit policy</h3><form id="creditPolicyForm" class="field-row three-col"><input id="creditDefaultLimit" type="number" min="0" step="0.01" placeholder="Default credit limit"/><input id="creditTermsDays" type="number" min="0" placeholder="Terms (days)"/><input id="creditApprovalAbove" type="number" min="0" step="0.01" placeholder="Approval above amount"/><label><input id="creditBlockOverdue" type="checkbox" checked/> Block overdue</label><button type="submit">Save policy</button></form></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Customer credit exposure</h3><span class="mini-badge">Company scoped</span></div><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Limit</th><th>Outstanding</th><th>Overdue</th><th>Available</th><th>Status</th></tr></thead><tbody id="creditOverviewBody"></tbody></table></div></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Price lists</h3><button id="priceListFormToggle" class="action-btn" type="button">New price list</button></div><form id="priceListForm" class="field-row three-col hidden"><input id="priceListName" placeholder="Price list name" required/><input id="priceListCurrency" value="PKR" placeholder="Currency"/><button type="submit">Create</button></form><div class="table-scroll"><table><thead><tr><th>Name</th><th>Currency</th><th>Items</th><th>Active</th></tr></thead><tbody id="priceListsBody"></tbody></table></div></div>
+        </section>
+        <section class="tab" id="commissions">
+          <div class="dashboard-header"><div><p class="section-kicker">Sales performance</p><h2>Commission statements</h2><p class="login-helper">Statements are calculated from posted sales and configured rules.</p></div><div><a class="action-btn" href="/api/commissions/export" target="_blank" rel="noreferrer">Export CSV</a><button id="refreshCommissions" class="action-btn" type="button">Refresh</button></div></div>
+          <div class="panel"><h3>Commission rule</h3><form id="commissionRuleForm" class="field-row four-col"><input id="commissionRuleName" placeholder="Rule name" required/><select id="commissionRuleRole"><option value="salesman">Salesman</option><option value="driver">Driver</option></select><select id="commissionRuleBasis"><option value="net_sales">Net sales</option><option value="gross_sales">Gross sales</option><option value="collected_cash">Collected cash</option></select><input id="commissionRuleRate" type="number" min="0" max="100" step="0.01" placeholder="Rate %" required/><button type="submit">Save rule</button></form></div>
+          <div class="panel table-panel"><table><thead><tr><th>Salesman / Driver</th><th>Period</th><th>Commission</th><th>Status</th><th>Settlement</th><th>Action</th></tr></thead><tbody id="commissionStatementsBody"></tbody></table></div>
+        </section>
+        <section class="tab" id="production">
+          <div class="section-heading"><p class="section-kicker">Traceable operations</p><h2>Production management</h2><p>Create real company-scoped batches, consume existing inventory, and release only quality-approved output.</p></div>
+          <div class="panel form-panel">
+            <h3>New production batch</h3>
+            <form id="productionBatchForm" class="stack-form"><div class="field-row two-col"><label>Batch number<input id="productionBatchNumber" required maxlength="60" placeholder="e.g. B-2026-001"></label><label>Product<select id="productionProduct" required></select></label></div><div class="field-row two-col"><label>Planned quantity<input id="productionPlannedQuantity" type="number" min="0.01" step="0.01" required></label><label>Line<select id="productionLine"><option value="">No line</option></select></label></div><textarea id="productionNotes" maxlength="1000" placeholder="Notes (optional)"></textarea><button type="submit">Create batch</button></form>
+          </div>
+          <div class="panel form-panel"><h3>Raw material allocation</h3><form id="productionInputForm" class="stack-form"><div class="field-row two-col"><select id="productionInputBatch" required><option value="">Batch</option></select><select id="productionInputProduct" required><option value="">Existing inventory product</option></select></div><input id="productionInputQuantity" type="number" min="0.01" step="0.01" required placeholder="Planned consumption"><button type="submit">Add raw material</button></form></div>
+          <div class="panel form-panel"><h3>Production line</h3><form id="productionLineForm" class="stack-form"><div class="field-row two-col"><input id="productionLineName" required maxlength="120" placeholder="Line name"><input id="productionLineCode" maxlength="40" placeholder="Code"></div><input id="productionLineLocation" maxlength="160" placeholder="Location"><button type="submit">Add line</button></form></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Batches</h3><button id="refreshProduction" class="action-btn" type="button">Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Batch</th><th>Product</th><th>Planned</th><th>Actual</th><th>Status</th><th>Quality</th><th>Actions</th></tr></thead><tbody id="productionBatchesBody"></tbody></table></div></div>
+          <div class="panel form-panel"><h3>Start lab test</h3><form id="labTestForm" class="stack-form"><div class="field-row two-col"><select id="labTestBatch" required><option value="">Completed batch</option></select><input id="labTestNumber" required maxlength="60" placeholder="Test number"></div><input id="labTestSampledAt" type="datetime-local"><button type="submit">Create lab test</button></form></div>
+          <div class="panel form-panel"><h3>Lab parameters</h3><form id="labParameterForm" class="stack-form"><div class="field-row two-col"><input id="labParameterName" required maxlength="120" placeholder="Parameter e.g. pH"><input id="labParameterUnit" maxlength="30" placeholder="Unit"></div><div class="field-row two-col"><input id="labParameterMin" type="number" step="any" placeholder="Minimum"><input id="labParameterMax" type="number" step="any" placeholder="Maximum"></div><input id="labParameterAllowed" maxlength="500" placeholder="Allowed text values, comma-separated"><button type="submit">Add parameter</button></form></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Lab tests & certificates</h3><button id="refreshLab" class="action-btn" type="button">Refresh</button></div><div class="table-wrap"><table><thead><tr><th>Test</th><th>Batch</th><th>Status</th><th>Tester</th><th>Actions</th></tr></thead><tbody id="labTestsBody"></tbody></table></div><div class="table-wrap"><table><thead><tr><th>Certificate</th><th>Batch</th><th>Product</th><th>Traceability</th><th>Issued</th></tr></thead><tbody id="qualityCertificatesBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="documents">
+          <div class="dashboard-header"><div><p class="section-kicker">Secure metadata-first records</p><h2>Documents & certificates</h2><p class="login-helper">Files stay in external storage. This workspace manages validated metadata, versions, access and expiry reminders.</p></div><button id="refreshDocuments" class="action-btn" type="button">Refresh</button></div>
+          <div class="panel"><form id="documentForm" class="stack-form"><div class="field-row three-col"><input id="documentTitle" maxlength="160" placeholder="Document title" required><input id="documentType" maxlength="80" placeholder="Type e.g. insurance" required><select id="documentEntityType"><option value="company_asset">Company asset</option><option value="vehicle">Vehicle</option><option value="employee">Employee</option><option value="production_batch">Production batch</option><option value="lab_result">Lab result</option><option value="customer">Customer</option></select></div><div class="field-row three-col"><input id="documentEntityId" type="number" min="1" placeholder="Related record ID (optional)"><input id="documentExpiresOn" type="date"><select id="documentVisibility"><option value="company">Company access</option><option value="restricted">Restricted roles</option></select></div><textarea id="documentDescription" maxlength="2000" placeholder="Description / retention notes"></textarea><button type="submit">Create metadata record</button></form></div>
+          <div class="panel"><form id="documentVersionForm" class="stack-form"><div class="field-row three-col"><select id="documentVersionId" required><option value="">Select document</option></select><input id="documentFilename" maxlength="160" placeholder="Original filename" required><input id="documentMimeType" placeholder="MIME type e.g. application/pdf" required></div><div class="field-row three-col"><input id="documentByteSize" type="number" min="0" max="52428800" placeholder="Size in bytes" required><input id="documentChecksum" pattern="[a-fA-F0-9]{64}" maxlength="64" placeholder="SHA-256 checksum" required><select id="documentUploadStatus"><option value="pending">Pending upload</option><option value="uploaded">Uploaded</option><option value="quarantined">Quarantined</option></select></div><button type="submit">Register version & get upload descriptor</button></form></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Document register</h3><span class="tag neutral">No raw file bytes handled by this app</span></div><div class="table-wrap"><table><thead><tr><th>Title</th><th>Target</th><th>Type</th><th>Version</th><th>Expiry</th><th>Status</th><th>Actions</th></tr></thead><tbody id="documentsBody"></tbody></table></div></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Certificate lifecycle</h3></div><div class="table-wrap"><table><thead><tr><th>Number</th><th>Type</th><th>Target</th><th>Issued</th><th>Expiry</th><th>Status</th></tr></thead><tbody id="certificatesBody"></tbody></table></div></div>
+          <div class="panel table-panel"><div class="panel-header"><h3>Expiry reminders</h3></div><div class="table-wrap"><table><thead><tr><th>Document</th><th>Target</th><th>Expiry</th><th>Reminder</th></tr></thead><tbody id="documentRemindersBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="reports">
+          <div class="dashboard-header reports-header">
+            <div>
+              <p class="section-kicker">Business intelligence</p>
+              <h2>Reports & analytics</h2>
+            </div>
+            <span class="tag success">Live from your records</span>
+          </div>
+
+          <div class="report-controls panel">
+            <div>
+              <strong>Generate a report</strong>
+              <small>Select a report type and period</small>
+            </div>
+            <div class="report-filter-fields">
+              <label>Report Type
+                <select id="reportType" aria-label="Select report type">
+                  <option value="daily">Daily Report</option>
+                  <option value="monthly">Monthly Report</option>
+                  <option value="annual">Annual Report</option>
+                </select>
+              </label>
+              <label id="dailyFilter">Date <input id="reportDate" type="date" aria-label="Select report date" /></label>
+              <label id="monthlyFilter" class="hidden">Month / Year <input id="reportMonth" type="month" aria-label="Select report month and year" /></label>
+              <label id="annualFilter" class="hidden">Year <input id="reportYear" type="number" min="2000" max="2100" placeholder="e.g. 2026" aria-label="Select report year" /></label>
+              <button id="applyReportFilter" type="button">Generate report</button>
+              <button id="clearReportFilter" class="action-btn" type="button">All time</button>
+            </div>
+            <div id="exportControls" class="export-controls" aria-label="Data export controls">
+              <strong>Export company data</strong>
+              <label>From <input id="exportFrom" type="date" /></label>
+              <label>To <input id="exportTo" type="date" /></label>
+              <button class="export-btn" data-export-resource="customers" type="button">Customers CSV</button>
+              <button class="export-btn" data-export-resource="orders" type="button">Orders CSV</button>
+              <button class="export-btn" data-export-resource="inventory" type="button">Inventory CSV</button>
+              <button class="export-btn" data-export-resource="finances" type="button">Finances CSV</button>
+            </div>
+          </div>
+
+          <section class="panel" id="advancedReportBuilderPanel">
+            <div class="panel-header"><div><p class="section-kicker">Advanced report builder</p><h2>Saved tenant reports</h2><p class="login-helper">Build bounded reports from company-scoped records. Filters and groupings are validated by the server.</p></div><button id="refreshReportDefinitions" class="action-btn" type="button">Refresh</button></div>
+            <div class="field-row two-col"><label>Name <input id="reportDefinitionName" maxlength="120" placeholder="Monthly orders" /></label><label>Source <select id="reportDefinitionSource"><option value="orders">Orders</option><option value="sales">Sales</option><option value="customers">Customers</option><option value="products">Products</option><option value="expenses">Expenses</option><option value="payments">Payments</option></select></label></div>
+            <div class="field-row three-col"><label>Filter field <select id="reportDefinitionFilterField"><option value="">None</option><option value="status">Status</option><option value="name">Name</option><option value="category">Category</option><option value="created_at">Created date</option></select></label><label>Contains / equals <input id="reportDefinitionFilterValue" maxlength="200" /></label><label>Group by <select id="reportDefinitionGroupBy"><option value="">No grouping</option><option value="status">Status</option><option value="category">Category</option><option value="created_at">Created date</option></select></label></div>
+            <div class="cta-row"><button id="saveReportDefinition" type="button">Save report</button><span id="reportDefinitionStatus" class="login-helper"></span></div>
+            <div class="table-scroll"><table><thead><tr><th>Name</th><th>Source</th><th>Updated</th><th>Actions</th></tr></thead><tbody id="reportDefinitionsBody"><tr><td colspan="4">No saved reports.</td></tr></tbody></table></div>
+          </section>
+          <section class="panel" id="systemHealthPanel"><div class="panel-header"><div><p class="section-kicker">System health</p><h2>Readiness & monitoring</h2></div><button id="refreshSystemHealth" class="action-btn" type="button">Refresh</button></div><div class="report-kpi-grid compact-kpis"><div class="report-kpi"><span>Service</span><strong id="healthStatus">—</strong><small id="healthUptime">—</small></div><div class="report-kpi"><span>Database</span><strong id="readinessStatus">—</strong><small>Readiness probe</small></div></div><p id="healthMonitorStatus" class="login-helper"></p></section>
+
+          <section id="forecastingPanel" class="panel forecasting-panel" aria-labelledby="forecastingTitle">
+            <div class="panel-header"><div><p class="section-kicker">Decision support</p><h2 id="forecastingTitle">Sales & demand forecast</h2><p class="login-helper">Transparent baseline using only this company's recorded sales, orders, and delivery subscriptions.</p></div><span class="mini-badge">No external AI</span></div>
+            <div class="forecast-controls">
+              <label>Metric<select id="forecastMetric"><option value="units">Demand units</option><option value="revenue">Revenue</option></select></label>
+              <label>Product<select id="forecastProduct"><option value="">All products</option></select></label>
+              <label>Forecast periods<select id="forecastHorizon"><option value="1">1 month</option><option value="3" selected>3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
+              <button id="generateForecast" type="button">Generate forecast</button>
+            </div>
+            <div id="forecastStatus" class="forecast-status" role="status">Select Generate forecast to use recorded history.</div>
+            <div class="forecast-summary-grid"><div><span>Next period</span><strong id="forecastValue">—</strong></div><div><span>Confidence</span><strong id="forecastConfidence">—</strong></div><div><span>Data window</span><strong id="forecastWindow">—</strong></div><div><span>Sources</span><strong id="forecastSources">—</strong></div></div>
+            <p id="forecastExplanation" class="forecast-explanation"></p>
+            <div class="table-scroll"><table><thead><tr><th>Period</th><th>Forecast</th><th>Method</th></tr></thead><tbody id="forecastTableBody"><tr><td colspan="3">No forecast generated.</td></tr></tbody></table></div>
+          </section>
+
+          <section class="panel" id="reorderReportPanel">
+            <div class="panel-header"><div><p class="section-kicker">Customer retention</p><h2>Smart reorder readiness</h2><p class="login-helper">Company-scoped metrics from real, non-cancelled orders. Insufficient history is shown explicitly.</p></div><button id="refreshReorderReport" class="action-btn" type="button">Refresh</button></div>
+            <div class="field-row two-col"><label>Reminder lead days <input id="reorderReminderLeadDays" type="number" min="0" max="365" /></label><label>Quantity buffer (%) <input id="reorderQuantityBuffer" type="number" min="0" max="100" step="0.1" /></label></div>
+            <button id="saveReorderRules" type="button">Save reminder rules</button><span id="reorderRuleStatus" class="login-helper"></span>
+            <div class="table-scroll"><table><thead><tr><th>Customer</th><th>Product</th><th>History</th><th>Last order</th><th>Avg interval</th><th>Expected next</th><th>Suggested qty</th><th>Reminder</th></tr></thead><tbody id="reorderReportBody"></tbody></table></div>
+          </section>
+
+          <div id="reportNoData" class="report-no-data hidden" role="status">No data available for the selected period.</div>
+
+          <div class="report-tabs" role="tablist">
+            <button class="report-tab active" data-report-view="all" type="button">All reports</button>
+            <button class="report-tab" data-report-view="monthly" type="button">Monthly</button>
+            <button class="report-tab" data-report-view="customers" type="button">Customers</button>
+            <button class="report-tab" data-report-view="inventory" type="button">Inventory</button>
+            <button class="report-tab" data-report-view="suppliers" type="button">Suppliers</button>
+            <button class="report-tab" data-report-view="finance" type="button">Finance</button>
+          </div>
+
+          <div class="report-kpi-grid">
+            <div class="report-kpi"><span>Revenue</span><strong id="reportRevenue">Rs 0</strong><small>All recorded sales</small></div>
+            <div class="report-kpi"><span>Net Profit</span><strong id="reportProfit">Rs 0</strong><small>Sales - purchases - expenses</small></div>
+            <div class="report-kpi"><span>Inventory Cost</span><strong id="reportInventoryCost">Rs 0</strong><small>Current stock at cost</small></div>
+            <div class="report-kpi"><span>Inventory Retail</span><strong id="reportInventoryRetail">Rs 0</strong><small>Potential sales value</small></div>
+            <div class="report-kpi"><span>Payments Received</span><strong id="reportPayments">Rs 0</strong><small>Recorded collections</small></div>
+          </div>
+
+          <section class="panel profitability-panel" id="profitabilityPanel">
+            <div class="panel-header"><div><p class="section-kicker">Advanced profitability</p><h2>Profitability engine</h2><p class="login-helper">Gross and net margin from this company's recorded sales, orders, product costs, and expenses. No estimated metrics.</p></div><div class="cta-row"><button id="refreshProfitability" class="action-btn" type="button">Refresh</button><button id="exportProfitability" class="action-btn" type="button">Export CSV</button></div></div>
+            <div class="report-kpi-grid compact-kpis"><div class="report-kpi"><span>Gross profit</span><strong id="profitabilityGrossProfit">Rs 0</strong><small id="profitabilityGrossMargin">0% margin</small></div><div class="report-kpi"><span>Net profit</span><strong id="profitabilityNetProfit">Rs 0</strong><small id="profitabilityNetMargin">0% margin</small></div><div class="report-kpi"><span>Cost of goods</span><strong id="profitabilityCogs">Rs 0</strong><small>Product purchase cost</small></div><div class="report-kpi"><span>Operating expenses</span><strong id="profitabilityExpenses">Rs 0</strong><small>Recorded expenses</small></div></div>
+            <div class="report-grid two-reports"><div><h3>Customer profitability</h3><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Revenue</th><th>COGS</th><th>Gross profit</th><th>Margin</th></tr></thead><tbody id="customerProfitabilityBody"><tr><td colspan="5">No profitability data.</td></tr></tbody></table></div></div><div><h3>Route profitability</h3><div class="table-scroll"><table><thead><tr><th>Route</th><th>Deliveries</th><th>Revenue</th><th>COGS</th><th>Gross profit</th></tr></thead><tbody id="routeProfitabilityBody"><tr><td colspan="5">No route profitability data.</td></tr></tbody></table></div></div></div>
+            <p id="profitabilityMethodology" class="forecast-explanation"></p>
+          </section>
+
+          <div class="report-grid two-reports">
+            <div class="panel report-box report-view-panel" data-report-view-panel="monthly">
+              <div class="panel-header"><h2>Monthly performance</h2><span class="mini-badge">12 months</span></div>
+              <table><thead><tr><th>Month</th><th>Sales</th><th>Costs</th><th>Profit</th></tr></thead><tbody id="monthlyReportBody"></tbody></table>
+            </div>
+            <div class="panel report-box report-view-panel" data-report-view-panel="customers">
+              <div class="panel-header"><h2>Customer performance</h2><span class="mini-badge">Top customers</span></div>
+              <table><thead><tr><th>Customer</th><th>Orders</th><th>Total</th></tr></thead><tbody id="customerReportBody"></tbody></table>
+            </div>
+          </div>
+
+          <div class="report-grid two-reports">
+            <div class="panel report-box report-view-panel" data-report-view-panel="inventory">
+              <div class="panel-header"><h2>Inventory report</h2><span class="mini-badge">Stock value / movement</span></div>
+              <table><thead><tr><th>Product</th><th>Units / movement</th><th>Cost value</th><th>Retail value</th></tr></thead><tbody id="inventoryReportBody"></tbody></table>
+            </div>
+            <div class="panel report-box report-view-panel" data-report-view-panel="suppliers">
+              <div class="panel-header"><h2>Supplier purchases</h2><span class="mini-badge">Supplier totals</span></div>
+              <table><thead><tr><th>Supplier</th><th>Orders</th><th>Total</th></tr></thead><tbody id="supplierReportBody"></tbody></table>
+            </div>
+          </div>
+
+          <div class="report-grid three-reports">
+            <div class="panel report-box report-view-panel" data-report-view-panel="finance"><div class="panel-header"><h2>Sales by day</h2></div><ul id="salesReportList" class="plain-list"></ul></div>
+            <div class="panel report-box report-view-panel" data-report-view-panel="finance"><div class="panel-header"><h2>Expenses</h2></div><ul id="expenseReportList" class="plain-list"></ul></div>
+            <div class="panel report-box report-view-panel" data-report-view-panel="finance"><div class="panel-header"><h2>Payments</h2></div><ul id="paymentReportList" class="plain-list"></ul></div>
+          </div>
+        </section>
+
+        <section class="tab" id="auditLogs">
+          <div class="dashboard-header">
+            <div>
+              <p class="section-kicker">Administration</p>
+              <h2>Audit logs</h2>
+            </div>
+            <span class="tag success">Read-only, company scoped</span>
+          </div>
+          <div class="panel audit-controls">
+            <div class="field-row two-col">
+              <label>From <input id="auditFrom" type="date" /></label>
+              <label>To <input id="auditTo" type="date" /></label>
+            </div>
+            <div class="field-row three-col">
+              <label>Action <input id="auditAction" maxlength="100" placeholder="e.g. create" /></label>
+              <label>Entity <input id="auditEntityType" maxlength="100" placeholder="e.g. sale" /></label>
+              <label>User <input id="auditUser" maxlength="100" placeholder="Name or username" /></label>
+              <label>User ID <input id="auditUserId" type="number" min="1" step="1" placeholder="Any user" /></label>
+            </div>
+            <div class="cta-row">
+              <button id="applyAuditFilters" type="button">Apply filters</button>
+              <button id="clearAuditFilters" class="btn-secondary" type="button">Clear</button>
+              <button id="exportAuditCsv" class="action-btn" type="button">Export CSV</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h2>Immutable activity history</h2><span id="auditSummary" class="mini-badge">No records</span></div>
+            <div class="table-scroll">
+              <table><thead><tr><th>Date</th><th>Action</th><th>Entity</th><th>Entity ID</th><th>User</th><th>Details</th></tr></thead><tbody id="auditLogTableBody"></tbody></table>
+            </div>
+            <div class="cta-row audit-pagination">
+              <button id="auditPreviousPage" class="btn-secondary" type="button">Previous</button>
+              <span id="auditPageLabel" class="muted-label">Page 1</span>
+              <button id="auditNextPage" class="btn-secondary" type="button">Next</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab" id="operations">
+          <div class="dashboard-header"><div><p class="section-kicker">Platform controls</p><h2>Security, backup & integrations</h2></div><span class="tag success">Tenant isolated</span></div>
+          <div class="report-kpi-grid"><div class="report-kpi"><span>Security status</span><strong id="opsSecurityStatus">—</strong><small id="opsSecurityMessage">Run diagnostics</small></div><div class="report-kpi"><span>Backups</span><strong id="opsBackupCount">0</strong><small>Metadata and checksums</small></div><div class="report-kpi"><span>API</span><strong>v1</strong><small>Versioned metadata</small></div></div>
+          <div class="panel"><div class="panel-header"><h2>Backup & disaster recovery</h2><span class="mini-badge">Automatic restore disabled</span></div><div class="cta-row"><button id="createTenantBackup" type="button">Create tenant backup</button><button id="createFullBackup" class="btn-secondary" type="button">Create full backup (super-admin)</button></div><div class="table-scroll"><table><thead><tr><th>ID</th><th>Scope</th><th>Provider</th><th>Checksum</th><th>Status</th><th>Validation</th><th></th></tr></thead><tbody id="opsBackupBody"></tbody></table></div></div>
+          <div class="panel"><div class="panel-header"><h2>Security diagnostics</h2><button id="runSecurityDiagnostics" class="action-btn" type="button">Run checks</button></div><ul id="opsDiagnostics" class="plain-list"></ul></div>
+          <div class="panel"><div class="panel-header"><h2>API & integration layer</h2><span class="mini-badge">No external calls unless configured</span></div><p id="opsApiMetadata" class="muted-label">Loading API metadata…</p><div class="table-scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Endpoint</th><th>Enabled</th></tr></thead><tbody id="opsIntegrationsBody"></tbody></table></div></div>
+        </section>
+
+        <section class="tab" id="companies">
+          <div class="dashboard-header">
+            <div>
+              <p class="section-kicker">Administration</p>
+              <h2>Companies & users</h2>
+            </div>
+            <span class="tag success" id="adminScopeLabel">Secure tenant management</span>
+          </div>
+
+          <div id="saasOverview" class="report-kpi-grid admin-only-super">
+            <div class="report-kpi"><span>Total companies</span><strong id="saasTotalCompanies">0</strong><small>Registered tenants</small></div>
+            <div class="report-kpi"><span>Active companies</span><strong id="saasActiveCompanies">0</strong><small>Currently enabled</small></div>
+            <div class="report-kpi"><span>Trial accounts</span><strong id="saasTrialCompanies">0</strong><small>Trial subscriptions</small></div>
+            <div class="report-kpi"><span>Expired accounts</span><strong id="saasExpiredCompanies">0</strong><small>Need renewal</small></div>
+            <div class="report-kpi"><span>Subscription revenue</span><strong id="saasRevenue">Rs 0</strong><small>Paid subscription records</small></div>
+            <div class="report-kpi"><span>Expiring in 7 days</span><strong id="saasExpiring7">0</strong><small>Renewal attention</small></div>
+            <div class="report-kpi"><span>Pending payments</span><strong id="saasPendingPayments">0</strong><small>Billing follow-up</small></div>
+          </div>
+
+          <div id="companySettingsPanel" class="panel">
+            <h2>Company Settings</h2>
+            <form id="companySettingsForm" class="stack-form">
+              <div class="field-row two-col">
+                <input id="settingsCompanyName" placeholder="Company name" required />
+                <input id="settingsCompanyLogo" placeholder="Logo URL or file reference" />
+              </div>
+              <div class="field-row two-col">
+                <input id="settingsCompanyPhone" placeholder="Phone" />
+                <input id="settingsCompanyEmail" type="email" placeholder="Email" />
+              </div>
+              <input id="settingsCompanyAddress" placeholder="Address" />
+              <div class="field-row two-col">
+                <input id="settingsCompanyDomain" placeholder="Custom domain (example.com)" />
+                <input id="settingsCompanySubdomain" placeholder="Subdomain (portal.example.com)" />
+              </div>
+              <div class="field-row two-col">
+                <input id="settingsCompanySupportEmail" type="email" placeholder="Support email" />
+                <input id="settingsCompanyFavicon" placeholder="Favicon URL (optional)" />
+              </div>
+              <label>Date format<select id="settingsDateFormat">
+                <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+                <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              </select></label>
+              <div class="field-row three-col">
+                <label>Primary color <input id="settingsThemePrimary" type="color" value="#0a3a5c" /></label>
+                <label>Accent color <input id="settingsThemeAccent" type="color" value="#7fdce6" /></label>
+                <label>Background <input id="settingsThemeBackground" type="color" value="#f4fbfd" /></label>
+              </div>
+                            <label for="settingsCompanyLanguage" data-i18n="companyDefaultLanguage">Company default language</label>
+                            <select id="settingsCompanyLanguage">
+                              <option value="en">English</option>
+                              <option value="ur">اردو</option>
+                              <option value="ar">العربية</option>
+                            </select>
+                            <button type="submit" data-i18n="saveCompanySettings">Save Company Settings</button>
+            </form>
+            <div class="backup-controls">
+              <h3>Database backup</h3>
+              <p class="muted-label">Download a point-in-time SQLite backup for the selected company.</p>
+              <button id="downloadBackupBtn" type="button">Download SQLite backup</button>
+            </div>
+          </div>
+
+          <div id="tenantUsagePanel" class="panel">
+            <div class="panel-header"><div><h2>Plan & usage</h2><p class="muted-label">Limits are enforced server-side per tenant.</p></div><button id="refreshTenantUsage" class="action-btn" type="button">Refresh</button></div>
+            <div id="tenantUsageGrid" class="report-kpi-grid"><span class="muted-label">Select a company to view usage.</span></div>
+          </div>
+
+          <div id="companyCreatePanel" class="panel admin-only-super">
+            <h2>Create Company</h2>
+            <form id="companyForm" class="stack-form">
+              <div class="field-row two-col">
+                <input id="companyName" placeholder="Company name e.g. Aqua Pure Ltd" required />
+                <input id="companyCode" placeholder="Company code e.g. ABC001" required />
+              </div>
+              <div class="field-row two-col">
+                <input id="companyLogo" placeholder="Logo URL or file reference" />
+                <input id="companyCountry" placeholder="Country" />
+              </div>
+              <div class="field-row two-col">
+                <input id="companyPhone" placeholder="Phone e.g. 0300-1234567" />
+                <input id="companyEmail" type="email" placeholder="Email e.g. admin@company.com" />
+              </div>
+              <input id="companyAddress" placeholder="Address e.g. Islamabad" />
+              <div class="field-row three-col">
+                <select id="companyPlan"><option value="normal">Normal</option><option value="enterprise">Enterprise</option><option value="custom">Custom</option></select>
+                <select id="companySubscriptionStatus"><option value="active">Active</option><option value="trial">Trial</option><option value="suspended">Suspended</option><option value="expired">Expired</option></select>
+                <input id="companyStartDate" type="date" required />
+                <input id="companyExpiryDate" type="date" required />
+              </div>
+              <div class="field-row two-col">
+                <input id="companyAdminName" placeholder="First admin name e.g. Sara Ahmad" required />
+                <input id="companyAdminUsername" placeholder="Admin username e.g. sara_admin" required />
+              </div>
+              <input id="companyAdminPassword" type="password" placeholder="Admin password e.g. strong password" required />
+              <button type="submit">Create Company</button>
+            </form>
+          </div>
+
+          <div id="companyListPanel" class="panel table-panel admin-only-super">
+            <div class="panel-header"><h2>Company Accounts</h2><div class="field-row two-col"><input id="adminCompanySearch" placeholder="Search company or code" /><select id="adminCompanyStatusFilter"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div></div>
+            <table><thead><tr><th>Company</th><th>Code</th><th>Contact</th><th>Plan</th><th>Expiry</th><th>Users</th><th>Status</th><th>Action</th></tr></thead><tbody id="companyTableBody"></tbody></table>
+          </div>
+
+          <div id="subscriptionManagePanel" class="panel admin-only-super">
+            <h2>Manage Selected Subscription</h2>
+            <form id="subscriptionForm" class="stack-form">
+              <div class="field-row two-col">
+                <select id="subscriptionPlan"><option value="">Select company first</option></select>
+                <select id="subscriptionStatus"><option value="active">Active</option><option value="trial">Trial</option><option value="pending_payment">Pending Payment</option><option value="expired">Expired</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
+              </div>
+              <div class="panel table-panel admin-only-super"><div class="panel-header"><h2>Renewal Requests</h2><button id="refreshRenewalRequests" class="action-btn" type="button">Refresh</button></div><div class="table-scroll"><table><thead><tr><th>Company</th><th>Plan</th><th>Period</th><th>Requested</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="adminRenewalRequestsBody"></tbody></table></div></div>
+              <div class="panel table-panel admin-only-super"><div class="panel-header"><h2>Payment Proof Review</h2><button id="refreshPaymentProofs" class="action-btn" type="button">Refresh</button></div><div class="table-scroll"><table><thead><tr><th>Company</th><th>File</th><th>Status</th><th>Submitted</th><th>Review note</th><th>Actions</th></tr></thead><tbody id="adminPaymentProofsBody"></tbody></table></div></div>
+
+              <div id="customFeaturePanel" class="panel admin-only-super">
+                <div class="panel-header"><div><h2>Company module access</h2><p class="muted-label">Select a company, then choose exactly which modules that company may use. These settings are enforced by the backend.</p></div><button id="saveCustomFeatures" class="action-btn" type="button">Save module access</button></div>
+                <div id="customFeatureList" class="field-row three-col"><span class="muted-label">Select a company to load features.</span></div>
+              </div>
+              <div class="field-row three-col">
+                <input id="subscriptionStart" type="date" placeholder="Start date" />
+                <input id="subscriptionEnd" type="date" placeholder="End date" />
+                <input id="subscriptionPrice" type="number" step="0.01" placeholder="Price PKR" />
+              </div>
+                <div class="field-row three-col">
+                  <select id="subscriptionBillingCycle"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="6_months">6 Months</option><option value="yearly">Yearly</option><option value="custom">Custom</option></select>
+                  <input id="subscriptionPaymentAmount" type="number" min="0" step="0.01" placeholder="Payment amount" />
+                  <select id="subscriptionPaymentMethod"><option>Bank Transfer</option><option>Cash</option><option>Cheque</option><option>Online Transfer</option><option>Other</option></select>
+                </div>
+                <div class="field-row two-col">
+                  <input id="subscriptionPaymentReference" placeholder="Payment reference" />
+                  <button id="renewSubscriptionBtn" class="action-btn" type="button">Renew selected subscription</button>
+                </div>
+                <button type="submit">Save Subscription</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2 id="userManagementTitle">Company Users</h2>
+            <form id="userForm" class="stack-form">
+              <div class="field-row two-col">
+                <input id="userName" placeholder="Employee name e.g. Ali Khan" required />
+                <input id="userUsername" placeholder="Username e.g. ali_staff" required />
+              </div>
+              <div class="field-row two-col">
+                <input id="userPassword" type="password" placeholder="Password e.g. strong password" required />
+                <select id="userRole"><option value="staff">Normal User</option><option value="manager">Manager</option><option value="accountant">Accountant</option><option value="sales_staff">Sales Staff</option><option value="inventory_staff">Inventory / Warehouse Staff</option><option value="company_admin">Company Admin</option></select>
+              </div>
+              <button type="submit">Create User</button>
+            </form>
+          </div>
+
+          <div class="panel table-panel">
+            <div class="panel-header"><h2>Users / Staff</h2><div class="field-row three-col"><input id="userSearch" placeholder="Search name, email, username" /><select id="userStatusFilter"><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select><button id="refreshUsersBtn" class="action-btn" type="button">Refresh</button></div></div>
+            <table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Company</th><th>Action</th></tr></thead><tbody id="userTableBody"></tbody></table>
+          </div>
+        </section>
+
+        <section class="tab" id="franchiseManagement">
+          <div class="dashboard-header">
+            <div>
+              <p class="section-kicker">Network administration</p>
+              <h2 data-i18n="franchiseManagement">Franchise Management</h2>
+              <p class="muted-label">Manage authorized franchise relationships without changing tenant data.</p>
+            </div>
+            <div class="dashboard-tags">
+              <span id="franchiseAccessLabel" class="tag neutral">Checking access…</span>
+              <button id="franchiseRefreshBtn" class="action-btn" type="button">Refresh</button>
+            </div>
+          </div>
+
+          <div id="franchiseAccessState" class="franchise-state" role="status" aria-live="polite">Checking franchise access…</div>
+
+          <div id="franchiseWorkspace" class="franchise-workspace hidden">
+            <div class="franchise-sidebar-column">
+              <div id="franchiseCreatePanel" class="panel hidden">
+                <div class="panel-header"><h2>New relationship</h2><span class="mini-badge">Parent access</span></div>
+                <form id="franchiseCreateForm" class="stack-form">
+                  <label id="franchiseParentSelectWrap">Parent company
+                    <select id="franchiseParentCompanyId"><option value="">Select parent company</option></select>
+                  </label>
+                  <p id="franchiseParentCompanyFixed" class="muted-label hidden"></p>
+                  <label>Child company ID
+                    <input id="franchiseChildCompanyId" type="number" min="1" step="1" placeholder="Existing company ID" required />
+                  </label>
+                  <div class="field-row two-col">
+                    <label>Type
+                      <select id="franchiseCreateType"><option value="franchise">Franchise</option><option value="branch">Branch</option></select>
+                    </label>
+                    <label>Status
+                      <select id="franchiseCreateStatus"><option value="pending">Pending</option><option value="active">Active</option><option value="suspended">Suspended</option></select>
+                    </label>
+                  </div>
+                  <div class="field-row two-col">
+                    <label>Start date <input id="franchiseCreateStartDate" type="date" /></label>
+                    <label>End date <input id="franchiseCreateEndDate" type="date" /></label>
+                  </div>
+                  <input id="franchiseCreateAgreementNumber" maxlength="120" placeholder="Agreement number (optional)" />
+                  <textarea id="franchiseCreateNotes" rows="3" maxlength="2000" placeholder="Notes (optional)"></textarea>
+                  <button type="submit">Create relationship</button>
+                </form>
+              </div>
+
+              <div class="panel franchise-list-panel">
+                <div class="panel-header"><div><h2>Relationships</h2><p class="muted-label">Only relationships returned by your access scope are shown.</p></div><span id="franchiseRelationshipCount" class="mini-badge">0</span></div>
+                <div id="franchiseRelationshipList" class="franchise-relationship-list"></div>
+              </div>
+            </div>
+
+            <div class="franchise-detail-column">
+              <div id="franchiseDetailEmpty" class="panel franchise-empty-detail">
+                <h2>Select a relationship</h2>
+                <p class="muted-label">Choose an authorized relationship to view its agreement, branches, assignments and grants.</p>
+              </div>
+
+              <div id="franchiseDetailLoading" class="panel hidden"><p class="muted-label">Loading relationship details…</p></div>
+
+              <div id="franchiseDetailError" class="panel franchise-state error hidden" role="alert"></div>
+
+              <div id="franchiseDetailPanel" class="hidden">
+                <div class="panel">
+                  <div class="panel-header">
+                    <div><p class="section-kicker">Relationship</p><h2 id="franchiseDetailTitle">—</h2></div>
+                    <div class="dashboard-tags"><span id="franchiseDetailStatus" class="status-pill">—</span><button id="franchiseTerminateBtn" class="action-btn franchise-write-control" type="button">Terminate</button></div>
+                  </div>
+                  <div id="franchiseDetailMeta" class="franchise-meta-grid"></div>
+                  <form id="franchiseRelationshipForm" class="stack-form franchise-write-control">
+                    <div class="panel-header"><h3>Update relationship</h3><span class="muted-label">Status and agreement metadata</span></div>
+                    <div class="field-row three-col">
+                      <label>Status<select id="franchiseRelationshipStatus"><option value="pending">Pending</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="terminated">Terminated</option></select></label>
+                      <label>Start date<input id="franchiseRelationshipStartDate" type="date" /></label>
+                      <label>End date<input id="franchiseRelationshipEndDate" type="date" /></label>
+                    </div>
+                    <input id="franchiseRelationshipAgreementNumber" maxlength="120" placeholder="Agreement number" />
+                    <textarea id="franchiseRelationshipNotes" rows="3" maxlength="2000" placeholder="Relationship notes"></textarea>
+                    <button type="submit">Save relationship</button>
+                  </form>
+                </div>
+
+                <div class="panel franchise-section">
+                  <div class="panel-header"><div><h2>Branches</h2><p class="muted-label">Branches owned by the child company.</p></div></div>
+                  <form id="franchiseBranchForm" class="field-row three-col franchise-write-control">
+                    <input id="franchiseBranchCompanyId" type="number" min="1" step="1" placeholder="Branch company ID" required />
+                    <select id="franchiseBranchStatus"><option value="pending">Pending</option><option value="active">Active</option><option value="suspended">Suspended</option></select>
+                    <button type="submit">Add branch</button>
+                  </form>
+                  <div class="table-scroll"><table><thead><tr><th>Child company</th><th>Type</th><th>Status</th><th>Dates</th><th>Agreement</th></tr></thead><tbody id="franchiseBranchesBody"></tbody></table></div>
+                </div>
+
+                <div class="panel franchise-section">
+                  <div class="panel-header"><div><h2>Agreements</h2><p class="muted-label">Agreement metadata is stored on the relationship.</p></div></div>
+                  <form id="franchiseAgreementForm" class="stack-form franchise-write-control">
+                    <div class="field-row three-col">
+                      <input id="franchiseAgreementNumber" maxlength="120" placeholder="Agreement number" required />
+                      <select id="franchiseAgreementStatus"><option value="draft">Draft</option><option value="active">Active</option><option value="expired">Expired</option><option value="terminated">Terminated</option></select>
+                      <input id="franchiseAgreementCurrency" maxlength="3" value="PKR" placeholder="Currency" />
+                    </div>
+                    <div class="field-row three-col"><label>Signed on<input id="franchiseAgreementSignedOn" type="date" /></label><label>Effective on<input id="franchiseAgreementEffectiveOn" type="date" /></label><label>Expires on<input id="franchiseAgreementExpiresOn" type="date" /></label></div>
+                    <div class="field-row three-col"><input id="franchiseAgreementJoiningFee" type="number" min="0" step="0.01" placeholder="Joining fee" /><input id="franchiseAgreementRecurringFee" type="number" min="0" step="0.01" placeholder="Recurring fee" /><input id="franchiseAgreementRevenueShare" type="number" min="0" max="100" step="0.01" placeholder="Revenue share %" /></div>
+                    <input id="franchiseAgreementDocumentUrl" maxlength="500" placeholder="Document URL (optional)" />
+                    <textarea id="franchiseAgreementTerms" rows="3" maxlength="10000" placeholder="Terms (optional)"></textarea>
+                    <button type="submit">Add agreement</button>
+                  </form>
+                  <div class="table-scroll"><table><thead><tr><th>Number</th><th>Status</th><th>Effective</th><th>Expires</th><th>Fees</th><th>Share</th></tr></thead><tbody id="franchiseAgreementsBody"></tbody></table></div>
+                </div>
+
+                <div class="panel franchise-section">
+                  <div class="panel-header"><div><h2>Managers, employees & grants</h2><p class="muted-label">Assign existing users from the parent or child company.</p></div></div>
+                  <form id="franchiseAssignmentForm" class="stack-form franchise-write-control">
+                    <div class="field-row three-col"><select id="franchiseAssignmentUserSelect"><option value="">Select loaded user (optional)</option></select><input id="franchiseAssignmentUserId" type="number" min="1" step="1" placeholder="Or enter user ID" /><select id="franchiseAssignmentType"><option value="manager">Manager</option><option value="employee">Employee</option></select></div>
+                    <div id="franchiseAssignmentScopeGrid" class="franchise-check-grid"><label><input type="checkbox" value="management" checked /> Management</label><label><input type="checkbox" value="employees" checked /> Employees</label><label><input type="checkbox" value="customers" checked /> Customers</label><label><input type="checkbox" value="inventory" checked /> Inventory</label><label><input type="checkbox" value="reports" checked /> Reports</label><label><input type="checkbox" value="financial" /> Financial</label><label><input type="checkbox" value="consolidated_reports" /> Consolidated reports</label></div>
+                    <label class="inline-check"><input id="franchiseAssignmentCanWrite" type="checkbox" /> Grant write access for selected scopes</label>
+                    <textarea id="franchiseAssignmentNotes" rows="2" maxlength="2000" placeholder="Assignment notes"></textarea>
+                    <button type="submit">Save assignment</button>
+                  </form>
+                  <div class="table-scroll"><table><thead><tr><th>User</th><th>Type</th><th>Company</th><th>Active</th><th>Scopes</th><th>Notes</th></tr></thead><tbody id="franchiseAssignmentsBody"></tbody></table></div>
+
+                  <div id="franchiseEmployeeScopePanel" class="franchise-subsection hidden">
+                    <div class="panel-header"><div><h3>Authorized employees in scope</h3><p class="muted-label">Read-only employee records returned for this authorized franchise scope.</p></div><span id="franchiseEmployeeScopeCount" class="mini-badge">0</span></div>
+                    <div id="franchiseEmployeeScopeState" class="franchise-state hidden" role="status"></div>
+                    <div class="table-scroll"><table><thead><tr><th>Name</th><th>Company</th><th>Role</th><th>Status</th></tr></thead><tbody id="franchiseEmployeeScopeBody"></tbody></table></div>
+                  </div>
+
+                  <div class="franchise-subsection">
+                    <h3>Scope grants</h3>
+                    <form id="franchiseScopeForm" class="field-row four-col franchise-write-control">
+                      <select id="franchiseGrantUserSelect"><option value="">Select loaded user</option></select>
+                      <input id="franchiseGrantUserId" type="number" min="1" step="1" placeholder="Or enter user ID" />
+                      <select id="franchiseGrantScope"><option value="management">Management</option><option value="employees">Employees</option><option value="customers">Customers</option><option value="inventory">Inventory</option><option value="reports">Reports</option><option value="financial">Financial</option><option value="consolidated_reports">Consolidated reports</option></select>
+                      <button type="submit">Save scope</button>
+                    </form>
+                    <div class="field-row two-col franchise-write-control franchise-permission-checks"><label class="inline-check"><input id="franchiseGrantCanRead" type="checkbox" checked /> Can read</label><label class="inline-check"><input id="franchiseGrantCanWrite" type="checkbox" /> Can write</label></div>
+                    <div class="table-scroll"><table><thead><tr><th>User</th><th>Scope</th><th>Read</th><th>Write</th></tr></thead><tbody id="franchiseScopesBody"></tbody></table></div>
+                  </div>
+
+                  <div class="franchise-subsection">
+                    <h3>Report grants</h3>
+                    <form id="franchiseReportPermissionForm" class="field-row four-col franchise-write-control">
+                      <select id="franchiseReportUserSelect"><option value="">Select loaded user</option></select>
+                      <input id="franchiseReportUserId" type="number" min="1" step="1" placeholder="Or enter user ID" />
+                      <select id="franchiseReportKey"><option value="consolidated_reports">All consolidated</option><option value="consolidated_sales">Consolidated sales</option><option value="consolidated_inventory">Consolidated inventory</option><option value="consolidated_customers">Consolidated customers</option><option value="consolidated_financial">Consolidated financial</option></select>
+                      <button type="submit">Save report grant</button>
+                    </form>
+                    <div class="field-row three-col franchise-write-control franchise-permission-checks"><label class="inline-check"><input id="franchiseReportCanView" type="checkbox" checked /> Can view</label><label class="inline-check"><input id="franchiseReportCanExport" type="checkbox" /> Can export</label><label class="inline-check"><input id="franchiseReportConsolidated" type="checkbox" checked /> Consolidated</label></div>
+                    <div class="table-scroll"><table><thead><tr><th>User</th><th>Report</th><th>View</th><th>Export</th><th>Consolidated</th></tr></thead><tbody id="franchiseReportPermissionsBody"></tbody></table></div>
+                  </div>
+                </div>
+
+                <div class="panel franchise-section">
+                  <div class="panel-header"><div><h2>Fees</h2><p class="muted-label">Joining, recurring and operational franchise fees.</p></div></div>
+                  <form id="franchiseFeeForm" class="stack-form franchise-write-control">
+                    <div class="field-row four-col"><select id="franchiseFeeType"><option value="joining">Joining</option><option value="recurring">Recurring</option><option value="marketing">Marketing</option><option value="technology">Technology</option><option value="other">Other</option></select><input id="franchiseFeeDescription" maxlength="500" placeholder="Description" /><input id="franchiseFeeAmount" type="number" min="0" step="0.01" placeholder="Amount" /><input id="franchiseFeeCurrency" maxlength="3" value="PKR" placeholder="Currency" /></div>
+                    <div class="field-row three-col"><select id="franchiseFeeFrequency"><option value="one_time">One time</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select><input id="franchiseFeeDueDate" type="date" /><select id="franchiseFeeStatus"><option value="pending">Pending</option><option value="invoiced">Invoiced</option><option value="paid">Paid</option><option value="waived">Waived</option><option value="cancelled">Cancelled</option></select></div>
+                    <textarea id="franchiseFeeNotes" rows="2" maxlength="2000" placeholder="Fee notes"></textarea><button type="submit">Add fee</button>
+                  </form>
+                  <div class="table-scroll"><table><thead><tr><th>Type</th><th>Description</th><th>Amount</th><th>Frequency</th><th>Due</th><th>Status</th></tr></thead><tbody id="franchiseFeesBody"></tbody></table></div>
+                </div>
+
+                <div class="panel franchise-section">
+                  <div class="panel-header"><div><h2>Revenue shares</h2><p class="muted-label">Record a period and let the service calculate the parent and child amounts.</p></div></div>
+                  <form id="franchiseRevenueShareForm" class="stack-form franchise-write-control">
+                    <div class="field-row four-col"><label>Period start<input id="franchiseRevenueStart" type="date" required /></label><label>Period end<input id="franchiseRevenueEnd" type="date" required /></label><input id="franchiseRevenueGross" type="number" min="0" step="0.01" placeholder="Gross revenue" /><input id="franchiseRevenueDeductions" type="number" min="0" step="0.01" placeholder="Deductions" /></div>
+                    <div class="field-row three-col"><input id="franchiseRevenueSharePercent" type="number" min="0" max="100" step="0.01" placeholder="Share %" required /><select id="franchiseRevenueStatus"><option value="draft">Draft</option><option value="calculated">Calculated</option><option value="invoiced">Invoiced</option><option value="settled">Settled</option><option value="disputed">Disputed</option></select><input id="franchiseRevenueNotes" maxlength="2000" placeholder="Notes" /></div>
+                    <button type="submit">Add revenue share</button>
+                  </form>
+                  <div class="table-scroll"><table><thead><tr><th>Period</th><th>Gross</th><th>Deductions</th><th>Share</th><th>Parent</th><th>Child</th><th>Status</th></tr></thead><tbody id="franchiseRevenueSharesBody"></tbody></table></div>
+                </div>
+
+                <div id="franchiseConsolidatedReportPanel" class="panel franchise-section hidden">
+                  <div class="panel-header"><div><h2>Consolidated report</h2><p class="muted-label">Shown only when the selected relationship grants consolidated report access.</p></div><span id="franchiseReportAccessLabel" class="mini-badge">Authorized</span></div>
+                  <form id="franchiseConsolidatedReportForm" class="field-row four-col">
+                    <select id="franchiseConsolidatedReportKey"><option value="consolidated_reports">All consolidated</option><option value="consolidated_sales">Consolidated sales</option><option value="consolidated_inventory">Consolidated inventory</option><option value="consolidated_customers">Consolidated customers</option><option value="consolidated_financial">Consolidated financial</option></select>
+                    <input id="franchiseConsolidatedStart" type="date" aria-label="Report start date" />
+                    <input id="franchiseConsolidatedEnd" type="date" aria-label="Report end date" />
+                    <button type="submit">Load report</button>
+                  </form>
+                  <div id="franchiseConsolidatedState" class="franchise-state hidden" role="status"></div>
+                  <div id="franchiseConsolidatedKpis" class="report-kpi-grid"></div>
+                  <div class="table-scroll"><table><thead><tr><th>Company</th><th>Revenue</th><th>Transactions</th><th>Orders</th><th>Customers</th><th>Products</th><th>Stock</th></tr></thead><tbody id="franchiseConsolidatedBody"></tbody></table></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="powered-by-footer">Powered by TEMO SPRING WATER PRIVATE LIMITED</footer>
+
+    <script src="/offline-driver.js"></script>
+    <script src="/app.js"></script>
+    <script src="/platform-operations.js"></script>
+  </body>
+</html>

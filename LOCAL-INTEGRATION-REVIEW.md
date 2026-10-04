@@ -28,3 +28,15 @@ The password-change route is now registered once at startup, after authenticatio
 Render paid service deployment is paused. The prepared cost was $7/month compute plus $0.25/month for 1 GB persistent disk (tax/extra usage separate). Billing card entry is pending. No service has been deployed by this review.
 
 Next: address the launch blockers above; complete billing when authorized, deploy the staging branch with fresh test data, verify persistence across restart/redeploy, connect the website Worker, and run online end-to-end tests. Production go-live requires the owner's final approval.
+
+## Follow-up security and source restoration — 4 October 2026
+
+Restored the existing public frontend and AI, franchise, WhatsApp and supplier-procurement service sources from the owner's TEMO-AQUAFLOW.zip. No new ERP was created. JavaScript syntax and the local integration suite were checked after restoration; broad UI/module validation remains pending.
+
+Known default credentials no longer seed automatically; explicit strong bootstrap secrets are required and first-login password change is mandatory. Existing database users are unchanged and need credential review before going online. Superadmin password change now handles NULL company IDs. Malformed password hashes fail authentication safely.
+
+Recovery emails use the existing SMTP service and a configured HTTPS reset page. Responses never return tokens or disclose whether an account exists. Tokens are hashed in SQLite, expire after 30 minutes, and are consumed atomically so concurrent replay cannot succeed. Recovery invalidates sessions and outstanding tokens after reset. Actual SMTP delivery is not verified; configuration is pending. The restored frontend reads the emailed token, removes it from the URL and no longer displays default credentials.
+
+Database-adjacent storage is used for payment proofs and backups, with an explicit STORAGE_ROOT override. Tenant JSON exports omit global tables without company_id; JSON exports remain redacted data exports rather than complete restore images. Hosting restart/redeploy and full SQLite restore drill remain pending.
+
+The expanded suite covers customer order creation with server-side prices and isolation, explicit bootstrap, superadmin password change, recovery response privacy, concurrent reset replay/session revocation, and persistent-path backup checksum/isolation, in addition to the previous auth checks. See test output for counts. Production hosting/billing and online verification are still paused until salary. Launch business settings require owner confirmation; STAGING-DEPLOYMENT.md records the checklist.

@@ -21,6 +21,9 @@ const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = req
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
+const storageRoot = process.env.STORAGE_ROOT || path.join(path.dirname(path.resolve(dbPath)), 'storage');
+fs.mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
+fs.mkdirSync(storageRoot, { recursive: true });
 const db = new sqlite3.Database(dbPath);
 
 // Metadata-first storage boundary: file bytes are handled by an external object-storage worker.
@@ -74,7 +77,7 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
 
 function verifyPassword(password, storedHash) {
   const [salt, expectedHash] = String(storedHash || '').split(':');
-  if (!salt || !expectedHash) return false;
+  if (!salt || !/^[a-f0-9]{128}$/.test(expectedHash || '')) return false;
   const actualHash = crypto.scryptSync(password, salt, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(actualHash, 'hex'), Buffer.from(expectedHash, 'hex'));
 }
@@ -200,7 +203,7 @@ aiAutomationService.initialize();
 const whatsappAssistantService = createWhatsAppAssistantService({ db, query, insert, update, writeAudit });
 whatsappAssistantService.initialize();
 const notificationDeliveryService = createNotificationDeliveryService({ query, insert, update });
-const platformOperationsService = createPlatformOperationsService({ db, query, insert, update, writeAudit: (...args) => writeAudit(...args), rootDir: __dirname });
+const platformOperationsService = createPlatformOperationsService({ db, query, insert, update, writeAudit: (...args) => writeAudit(...args), rootDir: storageRoot });
 platformOperationsService.initialize().catch((error) => console.error('Platform operations initialization failed:', error.message));
 const franchiseService = createFranchiseService({ db, query, insert, update, writeAudit });
 const featureAccessService = createFeatureAccessService({ query });
@@ -1918,8 +1921,16 @@ function initializeDatabase() {
       WHERE NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.company_id = p.company_id AND sm.reference = 'PURCHASE-' || p.id AND sm.product_id = pi.product_id)
     `);
 
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
+    // Bootstrap only with explicit secrets; never publish known default credentials.
+    for (const [username, role, envKey, companySql] of [
+      ['superadmin', 'super_admin', 'BOOTSTRAP_SUPERADMIN_PASSWORD', 'NULL'],
+      ['admin', 'company_admin', 'BOOTSTRAP_ADMIN_PASSWORD', '(SELECT id FROM companies ORDER BY id LIMIT 1)']
+    ]) {
+      const password = process.env[envKey];
+      if (!password) continue;
+      if (password.length < 12 || password === 'admin123') throw new Error(`${envKey} must contain at least 12 characters.`);
+      db.run(`INSERT INTO users (company_id, username, password_hash, name, role, must_change_password) SELECT ${companySql}, ?, ?, ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = ?)`, [username, hashPassword(password), username, role, username]);
+    }
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
       if (err) return console.error('Seed check failed:', err.message);
@@ -2198,10 +2209,10 @@ app.post('/api/me/password', async (req, res) => {
     const currentPassword = String(req.body?.currentPassword || '');
     const newPassword = String(req.body?.newPassword || '');
     const confirmPassword = String(req.body?.confirmPassword || '');
-    const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
+    const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id IS ?', [req.user.id, req.user.company_id]))[0];
     if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
     if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
-    await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
+    await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id IS ?', [hashPassword(newPassword), req.user.id, req.user.company_id]);
     await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
     res.json({ success: true, mustChangePassword: false });
   } catch (error) {
@@ -2640,7 +2651,7 @@ app.get('/api/exports/:resource', requireRole('super_admin', 'company_admin', 'm
 
 app.get('/api/backup', requireRole(...backupRoles), async (req, res) => {
   if (!req.companyId) return res.status(400).json({ message: 'Select a company before creating a backup.' });
-  const backupPath = path.join(__dirname, `.aquaflow-backup-${crypto.randomBytes(12).toString('hex')}.db`);
+  const backupPath = path.join(storageRoot, `.aquaflow-backup-${crypto.randomBytes(12).toString('hex')}.db`);
   try {
     await new Promise((resolve, reject) => db.run('VACUUM INTO ?', [backupPath], (error) => error ? reject(error) : resolve()));
     await writeAudit(req, 'backup_sqlite', 'database', null, null, { format: 'sqlite' });
@@ -2684,15 +2695,27 @@ app.post('/api/signup', async (req, res) => {
 });
 
 app.post('/api/forgot-password', async (req, res) => {
+  const response = { success: true, message: 'If the account is eligible, reset instructions will be emailed.' };
   try {
     const identifier = String(req.body?.identifier || '').trim().toLowerCase();
-    const users = await query('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ? LIMIT 1', [identifier, identifier]);
-    if (!users[0]) return res.json({ success: true, message: 'If the account exists, reset instructions have been created.' });
+    const users = await query("SELECT id, email FROM users WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND active = 1 AND status = 'active' LIMIT 1", [identifier, identifier]);
+    const user = users[0];
+    const base = process.env.PASSWORD_RESET_URL;
+    // Recovery stays unavailable until an HTTPS reset page and SMTP are configured.
+    if (!user?.email || !base || !process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_FROM) return res.json(response);
+    const url = new URL(base);
+    if (url.protocol !== 'https:') return res.json(response);
+    const recent = await query("SELECT 1 FROM password_reset_tokens WHERE user_id = ? AND created_at > datetime('now', '-1 minute') LIMIT 1", [user.id]);
+    if (recent.length) return res.json(response);
     const token = crypto.randomBytes(32).toString('hex');
-    await insert('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+30 minutes"))', [token, users[0].id]);
-    res.json({ success: true, message: 'Reset token created. Use it to set a new password.', resetToken: token });
+    const digest = crypto.createHash('sha256').update(token).digest('hex');
+    await insert('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+30 minutes"))', [digest, user.id]);
+    url.searchParams.set('token', token);
+    const result = await notificationDeliveryService.sendEmail({ recipient: user.email, subject: 'TEMO password reset', message: `Reset your password: ${url.toString()}\nThis link expires in 30 minutes. If you did not request it, ignore this email.` });
+    if (result.status !== 'sent') await update('DELETE FROM password_reset_tokens WHERE token = ?', [digest]);
+    res.json(response);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json(response);
   }
 });
 
@@ -2700,10 +2723,11 @@ app.post('/api/reset-password', async (req, res) => {
   try {
     const { token, password, confirmPassword } = req.body || {};
     if (!token || !password || password !== confirmPassword || password.length < 8) return res.status(400).json({ message: 'A valid token and matching password of at least 8 characters are required.' });
-    const rows = await query('SELECT user_id FROM password_reset_tokens WHERE token = ? AND used_at IS NULL AND datetime(expires_at) > datetime("now")', [token]);
+    const digest = crypto.createHash('sha256').update(String(token)).digest('hex');
+    const rows = await query('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = ? AND used_at IS NULL AND datetime(expires_at) > datetime("now") RETURNING user_id', [digest]);
     if (!rows[0]) return res.status(400).json({ message: 'Reset token is invalid or expired.' });
     await update('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), rows[0].user_id]);
-    await update('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = ?', [token]);
+    await update('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND used_at IS NULL', [rows[0].user_id]);
     await update('DELETE FROM sessions WHERE user_id = ?', [rows[0].user_id]);
     res.json({ success: true, message: 'Password reset successfully.' });
   } catch (error) {
@@ -2881,7 +2905,7 @@ app.get('/api/subscription/invoice.pdf', requireCompanySubscriptionUser, async (
 
 const paymentProofTypes = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 const paymentProofExtensions = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
-const paymentProofRoot = path.join(__dirname, 'storage', 'subscription-payment-proofs');
+const paymentProofRoot = path.join(storageRoot, 'subscription-payment-proofs');
 
 app.post('/api/subscription/payment-proofs', requireCompanySubscriptionUser, requireRole('company_admin'), async (req, res) => {
   try {

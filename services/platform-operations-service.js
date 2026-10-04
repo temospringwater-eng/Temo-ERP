@@ -45,6 +45,8 @@ function createService({ db, query, insert, update, writeAudit, rootDir }) {
     for (const { name } of tables) {
       const columns = await query(`PRAGMA table_info(${JSON.stringify(name)})`);
       const hasCompany = columns.some((column) => column.name === 'company_id');
+      // Global/auth tables without company_id are not tenant export data.
+      if (scope !== 'full' && !hasCompany) continue;
       const rows = await query(`SELECT * FROM "${name.replace(/"/g, '""')}"${scope === 'full' || !hasCompany ? '' : ' WHERE company_id = ?'}`, scope === 'full' || !hasCompany ? [] : [companyId]);
       snapshot.tables[name] = { columns: columns.map((column) => column.name), rowCount: rows.length, rows: rows.map(redact) };
     }
