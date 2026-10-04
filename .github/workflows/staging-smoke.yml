@@ -1,0 +1,38 @@
+name: ERP Staging Smoke
+on:
+  push:
+    branches: [integration/water-club-api]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: node --check server.js
+      - name: Check service syntax
+        run: |
+          for f in services/*.js; do node --check "$f"; done
+      - name: Start ERP and verify health
+        env:
+          PORT: 3000
+          DB_PATH: ${{ runner.temp }}/hayrila-staging.db
+        run: |
+          node server.js > /tmp/temo-erp.log 2>&1 &
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              grep -q '"ok":true' /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/temo-erp.log
+          exit 1
