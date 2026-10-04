@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SQLite / local data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.backup
+backups/
+
+# Runtime/generated files
+storage/
+uploads/
+tmp/
+temp/
+logs/
+*.log
+
+# Test/debug artifacts
+coverage/
+.nyc_output/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
