@@ -39,6 +39,15 @@ const SUPPORTED_LANGUAGES = ['en', 'ur', 'ar'];
 app.use(express.json({ limit: '12mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/api/health', async (req, res) => {
+  try {
+    await query('SELECT 1 AS ok');
+    res.json({ ok: true, service: 'temo-aquaflow', database: 'reachable' });
+  } catch (error) {
+    res.status(503).json({ ok: false, service: 'temo-aquaflow', database: 'unavailable' });
+  }
+});
+
 const runtimeMetrics = { requests: 0, errors: 0, startedAt: Date.now(), durationsMs: 0 };
 const MONITORED_ERROR_STATUSES = new Set([400, 401, 403, 404, 409, 429, 500, 502, 503]);
 app.use((req, res, next) => {
