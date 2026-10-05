@@ -18,6 +18,7 @@ const { createNotificationDeliveryService } = require('./services/notification-d
 const { getSubscriptionStatus, accessError } = require('./services/subscription-service');
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
+const { createWaterClubService } = require('./services/water-club-service');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
@@ -2349,6 +2350,25 @@ function requireCustomer(req, res, next) {
 
 const customerPortalRoles = ['super_admin', 'company_admin', 'manager'];
 
+const waterClubService = createWaterClubService({ dbPath });
+waterClubService.registerRoutes(app, requireCustomer, requireRole);
+// Existing ERP subscriptions remain the source of recurring orders. Only club
+// schedules are automatically generated here; expired tenants are excluded.
+if (process.env.NODE_ENV !== 'test') {
+  const clubScheduler = setInterval(async () => {
+    try {
+      const companies = await query("SELECT DISTINCT ds.company_id FROM delivery_subscriptions ds JOIN water_club_members m ON m.company_id = ds.company_id AND m.customer_id = ds.customer_id WHERE ds.status = 'active' AND ds.next_due_date <= date('now')");
+      for (const row of companies) {
+        if (!isSubscriptionUsable(await getCompanySubscription(row.company_id))) continue;
+        const user = (await query("SELECT id FROM users WHERE company_id = ? AND active = 1 AND status = 'active' AND role = 'company_admin' ORDER BY id LIMIT 1", [row.company_id]))[0];
+        if (user) await waterClubService.generateDue({ companyId:row.company_id,user },new Date().toISOString().slice(0,10),true);
+      }
+    } catch (error) { console.error('Water Club schedule generation failed.'); }
+  },60000);
+  clubScheduler.unref();
+}
+
+
 app.get('/api/customer/me', requireCustomer, async (req, res) => {
   try {
     const customer = (await query(`SELECT c.id, c.name, c.email, c.phone, c.address, c.area, c.created_at, u.email AS login_email
@@ -2452,8 +2472,11 @@ app.patch('/api/customer/profile', requireCustomer, async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim(); const phone = String(req.body?.phone || '').trim(); const address = String(req.body?.address || '').trim();
     if (!name || name.length > 160 || phone.length > 40 || address.length > 500) return res.status(400).json({ message: 'Please provide valid profile values.' });
-    await update('UPDATE customers SET name = ?, phone = ?, address = ?, email = ? WHERE id = ? AND company_id = ?', [name, phone, address, String(req.body?.email || '').trim().slice(0, 160), req.user.customer_id, req.companyId]);
-    await update('UPDATE users SET name = ?, email = ? WHERE id = ? AND company_id = ? AND customer_id = ?', [name, String(req.body?.email || '').trim().slice(0, 160), req.user.id, req.companyId, req.user.customer_id]);
+    const current = (await query('SELECT email FROM users WHERE id = ? AND company_id = ?', [req.user.id,req.companyId]))[0];
+    const email = req.body?.email === undefined ? String(current?.email || '') : String(req.body.email).trim().toLowerCase();
+    if (email && (!/^\S+@\S+\.\S+$/.test(email) || email.length > 160)) return res.status(400).json({ message: 'A valid email is required.' });
+    await update('UPDATE customers SET name = ?, phone = ?, address = ?, email = ? WHERE id = ? AND company_id = ?', [name, phone, address, email, req.user.customer_id, req.companyId]);
+    await update('UPDATE users SET name = ?, email = ? WHERE id = ? AND company_id = ? AND customer_id = ?', [name, email, req.user.id, req.companyId, req.user.customer_id]);
     await writeAudit(req, 'update', 'customer_profile', req.user.customer_id, null, { name, phone, address });
     res.json((await customerScope(req)));
   } catch (error) { res.status(500).json({ message: 'Unable to update profile.' }); }
@@ -4668,15 +4691,7 @@ function isIsoDate(value) {
 }
 
 function nextSubscriptionDate(dateString, subscription) {
-  const date = new Date(`${dateString}T00:00:00Z`);
-  if (subscription.frequency === 'daily') date.setUTCDate(date.getUTCDate() + 1);
-  else if (subscription.frequency === 'alternate_days') date.setUTCDate(date.getUTCDate() + 2);
-  else if (subscription.frequency === 'weekly') date.setUTCDate(date.getUTCDate() + 7);
-  else if (subscription.frequency === 'monthly') date.setUTCMonth(date.getUTCMonth() + 1);
-  else if (subscription.custom_unit === 'weeks') date.setUTCDate(date.getUTCDate() + (Number(subscription.custom_interval) * 7));
-  else if (subscription.custom_unit === 'months') date.setUTCMonth(date.getUTCMonth() + Number(subscription.custom_interval));
-  else date.setUTCDate(date.getUTCDate() + Number(subscription.custom_interval));
-  return date.toISOString().slice(0, 10);
+  return waterClubService.nextDate(dateString, subscription);
 }
 
 function validateSubscriptionSchedule({ frequency, customInterval, customUnit, startDate, endDate }) {
@@ -4775,7 +4790,7 @@ async function setDeliverySubscriptionStatus(req, res, status) {
   const id = Number(req.params.id);
   const existing = await getDeliverySubscription(id, req.companyId);
   if (!existing) return res.status(404).json({ message: 'Delivery subscription not found.' });
-  if (status === 'resume' && existing.status === 'completed') return res.status(400).json({ message: 'Completed subscriptions cannot be resumed.' });
+  if (status === 'resume' && ['completed','cancelled'].includes(existing.status)) return res.status(400).json({ message: 'Completed subscriptions cannot be resumed.' });
   const nextStatus = status === 'pause' ? 'paused' : 'active';
   await update('UPDATE delivery_subscriptions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?', [nextStatus, id, req.companyId]);
   res.json(await getDeliverySubscription(id, req.companyId));
@@ -4798,31 +4813,8 @@ app.post('/api/delivery-subscriptions/:id/skip', requireRole('super_admin', 'com
 });
 
 app.post('/api/delivery-subscriptions/generate-due', requireRole('super_admin', 'company_admin', 'manager', 'sales_staff', 'staff'), async (req, res) => {
-  try {
-    const requestedDate = req.body?.upToDate || req.query.upToDate || new Date().toISOString().slice(0, 10);
-    if (!isIsoDate(requestedDate)) return res.status(400).json({ message: 'upToDate must be a valid YYYY-MM-DD date.' });
-    const subscriptions = await query(`SELECT * FROM delivery_subscriptions WHERE company_id = ? AND status = 'active' AND next_due_date <= ? ORDER BY id`, [req.companyId, requestedDate]);
-    const generated = [];
-    for (const subscription of subscriptions) {
-      let dueDate = subscription.next_due_date;
-      let guard = 0;
-      while (dueDate <= requestedDate && guard++ < 366) {
-        if (subscription.end_date && dueDate > subscription.end_date) break;
-        await insert('INSERT OR IGNORE INTO delivery_subscription_occurrences (company_id, delivery_subscription_id, due_date, status) VALUES (?, ?, ?, \'pending\')', [req.companyId, subscription.id, dueDate]);
-        const occurrence = (await query('SELECT * FROM delivery_subscription_occurrences WHERE company_id = ? AND delivery_subscription_id = ? AND due_date = ?', [req.companyId, subscription.id, dueDate]))[0];
-        if (occurrence.status === 'pending') {
-          const orderResult = await insert('INSERT INTO orders (company_id, customer_id, customer_name, delivery_address, notes, total_amount, created_by, delivery_subscription_id, subscription_occurrence_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [req.companyId, subscription.customer_id, subscription.customer_name || (await query('SELECT name FROM customers WHERE id = ? AND company_id = ?', [subscription.customer_id, req.companyId]))[0]?.name || '', subscription.delivery_address || '', subscription.notes || `Recurring delivery ${dueDate}`, Number(subscription.unit_price) * Number(subscription.quantity), req.user.id, subscription.id, occurrence.id]);
-          await insert('INSERT INTO order_items (company_id, order_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)', [req.companyId, orderResult.id, subscription.product_id, subscription.quantity, subscription.unit_price, Number(subscription.unit_price) * Number(subscription.quantity)]);
-          await update('UPDATE delivery_subscription_occurrences SET status = \'generated\', order_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = \'pending\'', [orderResult.id, occurrence.id]);
-          generated.push({ subscriptionId: subscription.id, occurrenceId: occurrence.id, orderId: orderResult.id, dueDate });
-        }
-        dueDate = nextSubscriptionDate(dueDate, subscription);
-      }
-      const nextStatus = subscription.end_date && dueDate > subscription.end_date ? 'completed' : 'active';
-      await update('UPDATE delivery_subscriptions SET next_due_date = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?', [dueDate, nextStatus, subscription.id, req.companyId]);
-    }
-    res.json({ generated, count: generated.length });
-  } catch (error) { res.status(500).json({ message: error.message }); }
+  try { res.json(await waterClubService.generateDue(req, req.body?.upToDate || new Date().toISOString().slice(0, 10))); }
+  catch (error) { res.status(error.status || 500).json({ message: error.status ? error.message : 'Unable to generate due deliveries.' }); }
 });
 
 app.patch('/api/orders/:id/status', requireRole('super_admin', 'company_admin', 'manager', 'sales_staff', 'staff', 'driver', 'delivery_driver'), async (req, res) => {
@@ -4832,6 +4824,10 @@ app.patch('/api/orders/:id/status', requireRole('super_admin', 'company_admin', 
     const status = String(req.body?.status || '');
     if (!order) return res.status(404).json({ message: 'Order not found.' });
     if (!orderStatuses.includes(status)) return res.status(400).json({ message: 'Invalid order status.' });
+    if (await waterClubService.isClubOrder(req.companyId, id)) {
+      await waterClubService.setOrderStatus(req, id, status);
+      return res.json(await getOrderById(id, req.companyId));
+    }
     await update('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?', [status, id, req.companyId]);
     if (status === 'delivered' && order.customer_id) await awardLoyalty(req, order.customer_id, order.total_amount, 'order', id, `Points earned on delivered order #${id}`);
     await writeAudit(req, 'status_change', 'order', id, { status: order.status }, { status });
@@ -4903,6 +4899,7 @@ app.patch('/api/deliveries/:id', requireRole('super_admin', 'company_admin', 'ma
     await update('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?', [status, delivery.order_id, req.companyId]);
     if (status === 'delivered' || status === 'partially_delivered') await createCommissionLineForDelivery(req.companyId, delivery, delivery.driver_id, req.user.id);
     await writeAudit(req, 'status_change', 'delivery', deliveryId, { status: delivery.status }, { status, driverId: delivery.driver_id });
+    await waterClubService.syncOrder(req, delivery.order_id);
     res.json(await getOrderById(delivery.order_id, req.companyId));
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
@@ -5034,6 +5031,7 @@ app.post('/api/driver/deliveries/:id/action', requireRole(...mobileDriverRoles),
       await insert(`INSERT INTO delivery_proofs (company_id, delivery_id, otp_challenge_id, otp_verified_at, signature_storage_key, signature_content_type, signature_byte_size, signature_sha256, signature_width, signature_height, photo_storage_key, photo_content_type, photo_byte_size, photo_sha256, photo_width, photo_height, captured_at, captured_by) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(delivery_id) DO UPDATE SET otp_challenge_id = excluded.otp_challenge_id, otp_verified_at = CURRENT_TIMESTAMP, signature_storage_key = excluded.signature_storage_key, signature_content_type = excluded.signature_content_type, signature_byte_size = excluded.signature_byte_size, signature_sha256 = excluded.signature_sha256, signature_width = excluded.signature_width, signature_height = excluded.signature_height, photo_storage_key = excluded.photo_storage_key, photo_content_type = excluded.photo_content_type, photo_byte_size = excluded.photo_byte_size, photo_sha256 = excluded.photo_sha256, photo_width = excluded.photo_width, photo_height = excluded.photo_height, captured_at = excluded.captured_at, captured_by = excluded.captured_by, updated_at = CURRENT_TIMESTAMP`, [req.companyId, deliveryId, req.verifiedOtp.id, signature.storageKey, signature.contentType, signature.byteSize, signature.sha256, signature.width, signature.height, photo?.storageKey || null, photo?.contentType || null, photo?.byteSize || null, photo?.sha256 || null, photo?.width || null, photo?.height || null, req.body.capturedAt || new Date().toISOString(), req.user.id]);
     }
     await writeAudit(req, action, 'delivery', deliveryId, { status: delivery.status }, { status: nextStatus, amount, bottleReturnCount, emptyCount, rescheduledFor, notes, proofCaptured: action === 'deliver' });
+    await waterClubService.syncOrder(req, delivery.order_id);
     const updated = (await query('SELECT * FROM deliveries WHERE id = ? AND company_id = ?', [deliveryId, req.companyId]))[0];
     res.json(updated);
   } catch (error) { res.status(500).json({ message: error.message }); }
@@ -5109,6 +5107,7 @@ async function applyOfflineDriverOperation(req, operation, syncRecordId) {
     if (bottleId && bottleReturnCount) await insert('INSERT INTO bottle_movements (company_id, bottle_id, customer_id, movement_type, quantity, reference, notes, created_by) SELECT ?, ?, o.customer_id, \'returned\', ?, ?, ?, ? FROM orders o WHERE o.id = ? AND o.company_id = ?', [req.companyId, bottleId, bottleReturnCount, `DELIVERY-${deliveryId}`, notes, req.user.id, delivery.order_id, req.companyId]);
   }
   if (action === 'deliver') await insert(`INSERT INTO delivery_proofs (company_id, delivery_id, otp_challenge_id, otp_verified_at, signature_storage_key, signature_content_type, signature_byte_size, signature_sha256, signature_width, signature_height, photo_storage_key, photo_content_type, photo_byte_size, photo_sha256, photo_width, photo_height, captured_at, captured_by) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(delivery_id) DO UPDATE SET otp_challenge_id = excluded.otp_challenge_id, otp_verified_at = CURRENT_TIMESTAMP, signature_storage_key = excluded.signature_storage_key, signature_content_type = excluded.signature_content_type, signature_byte_size = excluded.signature_byte_size, signature_sha256 = excluded.signature_sha256, signature_width = excluded.signature_width, signature_height = excluded.signature_height, photo_storage_key = excluded.photo_storage_key, photo_content_type = excluded.photo_content_type, photo_byte_size = excluded.photo_byte_size, photo_sha256 = excluded.photo_sha256, photo_width = excluded.photo_width, photo_height = excluded.photo_height, captured_at = excluded.captured_at, captured_by = excluded.captured_by, updated_at = CURRENT_TIMESTAMP`, [req.companyId, deliveryId, verifiedOtp.id, signature.storageKey, signature.contentType, signature.byteSize, signature.sha256, signature.width, signature.height, photo?.storageKey || null, photo?.contentType || null, photo?.byteSize || null, photo?.sha256 || null, photo?.width || null, photo?.height || null, payload.capturedAt || new Date().toISOString(), req.user.id]);
+  await waterClubService.syncOrder(req, delivery.order_id);
   const result = (await query('SELECT * FROM deliveries WHERE id = ? AND company_id = ?', [deliveryId, req.companyId]))[0];
   await writeAudit(req, `offline_${action}`, 'delivery', deliveryId, { status: delivery.status }, { status: nextStatus, syncOperationId: syncRecordId });
   return result;
@@ -6330,6 +6329,7 @@ async function refreshLoyaltyTier(companyId, customerId) {
   return (await query('SELECT la.*, lt.name AS tier_name, lt.multiplier, lt.reward_percent FROM loyalty_accounts la LEFT JOIN loyalty_tiers lt ON lt.id = la.tier_id WHERE la.company_id = ? AND la.customer_id = ?', [companyId, customerId]))[0];
 }
 async function awardLoyalty(req, customerId, amount, sourceType, sourceId, description) {
+  if (sourceType === 'order' && await waterClubService.isClubOrder(req.companyId, sourceId)) return null;
   if (!customerId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return null;
   const account = await ensureLoyaltyAccount(req.companyId, customerId);
   const key = `${sourceType}:${sourceId}:earn`;
@@ -6351,6 +6351,7 @@ async function backfillLoyaltyForCompany(req) {
   }
 }
 async function awardReferral(req, customerId, saleId) {
+  if ((await query('SELECT customer_id FROM water_club_members WHERE company_id = ? AND customer_id = ?', [req.companyId, customerId]))[0]) return;
   const referral = (await query('SELECT r.*, rc.reward_points FROM referrals r JOIN referral_codes rc ON rc.id = r.referral_code_id WHERE r.company_id = ? AND r.referred_customer_id = ? AND r.status = \'pending\'', [req.companyId, customerId]))[0];
   if (!referral) return;
   await update('UPDATE referrals SET status = \'qualified\', qualified_sale_id = ? WHERE id = ? AND company_id = ?', [saleId, referral.id, req.companyId]);

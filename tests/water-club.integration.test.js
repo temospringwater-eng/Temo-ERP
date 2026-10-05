@@ -158,6 +158,108 @@ test('Water Club API integration with disposable SQLite database', async (t) => 
     const valid = await api(`/api/backups/${r.data.id}/validate`, { method: 'POST', token: a.token, body: {} });
     assert.equal(valid.status, 200); assert.equal(valid.data.valid, true);
   });
+  await t.test('Water Club paid delivery, referral, redemption and subscription engine', async t => {
+    const worker = process.env.WC_WORKER_PATH ? (await import(process.env.WC_WORKER_PATH)).default : null;
+    const env = { APP_ENV: 'local', ERP_API_BASE_URL: `http://127.0.0.1:${port}`, ALLOWED_ORIGIN: 'http://club.test' };
+    let cookie;
+    if (worker) {
+      const loginProxy = await worker.fetch(new Request('http://club.test/api/water-club/auth/login', { method:'POST',headers:{ 'Content-Type':'application/json',Origin:'http://club.test' },body:JSON.stringify({ identifier:'fixture-0@example.test',password }) }),env);
+      assert.equal(loginProxy.status,200);cookie=loginProxy.headers.get('set-cookie').split(';')[0];
+    }
+    const proxy = async (route,method='GET',body) => {
+      if (!worker) {
+        const result=await api('/api/customer/water-club/'+route,{ token,method,body });
+        return { status:result.status,data:{ ok:result.status===200,data:result.data,message:result.data.message } };
+      }
+      const r=await worker.fetch(new Request('http://club.test/api/water-club/'+route,{ method,headers:{ Cookie:cookie,Origin:'http://club.test','Content-Type':'application/json' },...(body?{ body:JSON.stringify(body) }:{}) }),env);
+      return { status:r.status,data:await r.json() };
+    };
+    const p = await sql('INSERT INTO products(company_id,name,sale_price,purchase_price,stock) VALUES(?,?,?,?,?)',[a.user.companyId,'19L refill',300,200,500]);
+    assert.equal((await api('/api/water-club/admin/products',{ method:'POST',token:a.token,body:{ productId:p.id,kind:'refill_19l' } })).status,200);
+    assert.equal((await proxy('membership','POST',{ plan:'home' })).status,200);
+    const c = await api('/api/customers',{ method:'POST',token:a.token,body:{ name:'Referred club member',phone:'555012345',address:'Test address' } }); assert.equal(c.status,201);
+    const provision = await api(`/api/customers/${c.data.id}/portal-access`,{ method:'POST',token:a.token,body:{ email:'referred@example.test',password } }); assert.equal(provision.status,201);
+    const cLogin = await api('/api/customer/login',{ method:'POST',body:{ email:'referred@example.test',password } });assert.equal(cLogin.status,200);const ct=cLogin.data.token;
+    const club = (route,body,token=ct) => api('/api/customer/water-club/'+route,{ method:'POST',token,body });
+    const earn = async (token,quantity,key) => { const r = await club('orders',{ items:[{ productId:p.id,quantity }],requestKey:key },token);assert.equal(r.status,200,JSON.stringify(r.data));return r.data; };
+    const status = (id,status='delivered') => api(`/api/orders/${id}/status`,{ method:'PATCH',token:a.token,body:{ status } });
+    const pay = (id,amount,key,direction='receipt') => api(`/api/water-club/admin/orders/${id}/payment`,{ method:'POST',token:a.token,body:{ amount,method:'Cash',reference:key,requestKey:key,direction } });
+    const rewards = (session) => api('/api/customer/water-club/rewards',{ token:session });
+    await t.test('Catalog, membership and role boundaries',async()=>{
+      assert.equal((await proxy('catalog')).status,200);
+      const profileUpdate=await api('/api/customer/profile',{method:'PATCH',token,body:{name:'Updated customer',phone:'5550000',address:'Updated address'}});assert.equal(profileUpdate.status,200);assert.equal((await api('/api/customer/login',{method:'POST',body:{email:'fixture-0@example.test',password}})).status,200);
+      assert.equal((await api('/api/water-club/admin/products',{ method:'POST',token,body:{ productId:p.id,kind:'refill_19l' } })).status,403);
+      assert.equal((await club('membership',{ plan:'home' })).status,200);
+      const ref = await proxy('referrals');assert.equal(ref.status,200);const code=ref.data.data.code;
+      assert.equal((await club('referrals',{ code },token)).status,400);
+      assert.equal((await club('referrals',{ code })).status,200);
+      assert.equal((await club('referrals',{ code })).status,409);
+      const other = await api('/api/customer/login',{ method:'POST',body:{ email:'fixture-1@example.test',password } });assert.equal(other.status,200);
+      assert.equal((await club('membership',{ plan:'home' },other.data.token)).status,200);
+      assert.equal((await club('referrals',{ code },other.data.token)).status,400);
+    });
+    let first,second,large,reward;
+    await t.test('No points until full payment AND delivery; repeated events are safe',async()=>{
+      const r = await proxy('orders','POST',{ items:[{ productId:p.id,quantity:1,unitPrice:1 }],requestKey:'first-order-0001' });assert.equal(r.status,200,JSON.stringify(r.data));first=r.data.data;assert.equal(first.total_amount,300);
+      assert.equal((await pay(first.id,300,'first-pay-0001')).status,200);
+      assert.equal((await rewards(token)).data.points,0);
+      assert.equal((await status(first.id)).status,200);
+      assert.equal((await rewards(token)).data.points,10);
+      assert.equal((await status(first.id)).status,200);
+      assert.equal((await pay(first.id,300,'first-pay-0001')).status,200);
+      assert.equal((await rewards(token)).data.points,10);
+    });
+    await t.test('Referral waits for first paid delivery then awards 20 once',async()=>{
+      second=await earn(ct,1,'referred-order-0001');assert.equal((await status(second.id)).status,200);
+      assert.equal((await rewards(token)).data.points,10);
+      assert.equal((await pay(second.id,300,'referred-pay-0001')).status,200);
+      assert.equal((await rewards(ct)).data.points,10);assert.equal((await rewards(token)).data.points,30);
+      assert.equal((await status(second.id)).status,200);assert.equal((await rewards(token)).data.points,30);
+    });
+    await t.test('Concurrent redemption creates one zero-price refill order',async()=>{
+      large=await earn(token,14,'large-order-0001');assert.equal((await status(large.id)).status,200);assert.equal((await pay(large.id,4200,'large-pay-0001')).status,200);
+      assert.equal((await rewards(token)).data.points,100);
+      const stock=(await api('/api/products',{token:a.token})).data.find(row=>row.id===p.id).stock;assert.equal(stock,484);
+      const rs=await Promise.all([club('rewards/redeem',{ requestKey:'redeem-request-0001' },token),club('rewards/redeem',{ requestKey:'redeem-request-0002' },token)]);
+      assert.deepEqual(rs.map(r=>r.status).sort(),[200,409]);reward=rs.find(r=>r.status===200).data;assert.equal(reward.total_amount,0);
+      const again=await club('rewards/redeem',{ requestKey:rs[0].status===200?'redeem-request-0001':'redeem-request-0002' },token);assert.equal(again.data.id,reward.id);
+      assert.equal((await rewards(token)).data.points,0);
+    });
+    await t.test('Refund reverses spent points and referral without hiding debt',async()=>{
+      assert.equal((await pay(first.id,300,'refund-first-0001','payment')).status,200);assert.equal((await rewards(token)).data.pointsDebt,10);
+      assert.equal((await pay(second.id,300,'refund-ref-0001','payment')).status,200);assert.equal((await rewards(token)).data.pointsDebt,30);
+      assert.equal((await status(reward.id,'cancelled')).status,200);assert.equal((await rewards(token)).data.points,70);
+      await sql("UPDATE water_club_lots SET expires_at = datetime('now','-1 day') WHERE company_id = ? AND customer_id = ?",[a.user.companyId,ca.id]);
+      assert.equal((await rewards(token)).data.points,0);
+    });
+    await t.test('Cartons, first bonus, B2B opt-in and invalid request isolation',async()=>{
+      const carton=await sql('INSERT INTO products(company_id,name,sale_price,purchase_price,stock) VALUES(?,?,?,?,?)',[a.user.companyId,'1.5L bottle',100,50,100]);
+      assert.equal((await api('/api/water-club/admin/products',{ method:'POST',token:a.token,body:{ productId:carton.id,kind:'carton_15l',unitsPerReward:6 } })).status,200);
+      const order=await club('orders',{ requestKey:'carton-order-0001',items:[{ productId:carton.id,quantity:6 }] },token);assert.equal(order.status,200);
+      assert.equal((await status(order.data.id)).status,200);assert.equal((await pay(order.data.id,600,'carton-pay-0001')).status,200);assert.equal((await rewards(token)).data.points,5);
+      const conflict=await club('orders',{ requestKey:'carton-order-0001',items:[{ productId:carton.id,quantity:12 }] },token);assert.equal(conflict.status,409);
+      assert.equal((await club('orders',{ requestKey:'duplicate-order-001',items:[{ productId:carton.id,quantity:6 },{ productId:carton.id,quantity:6 }] },token)).status,400);
+      assert.equal((await api('/api/water-club/admin/members/'+ca.id,{ method:'POST',token:a.token,body:{ rewardsEnabled:false } })).status,200);
+      assert.equal((await rewards(token)).data.member.rewards_enabled,0);
+      assert.equal((await pay(order.data.id,600,'carton-refund-001','payment')).status,200);assert.equal((await rewards(token)).data.points,0);
+      assert.equal((await api('/api/water-club/admin/members/'+ca.id,{ method:'POST',token:a.token,body:{ rewardsEnabled:true } })).status,200);
+      const adjust={ points:10,reason:'Local QA correction',requestKey:'manual-adjust-0001' };
+      for(let i=0;i<2;i++)assert.equal((await api('/api/water-club/admin/members/'+ca.id+'/points',{ method:'POST',token:a.token,body:adjust })).status,200);
+      assert.equal((await rewards(token)).data.points,10);
+    });
+    await t.test('Recurring schedules use ERP prices; concurrent generation has no duplicates',async()=>{
+      const r=await proxy('subscriptions','POST',{ productId:p.id,quantity:2,unitPrice:1,frequency:'monthly',startDate:'2027-01-31',requestKey:'schedule-request-0001' });assert.equal(r.status,200,JSON.stringify(r.data));const schedule=r.data.data;assert.equal(schedule.unit_price,300);
+      const calls=await Promise.all([api('/api/delivery-subscriptions/generate-due',{ method:'POST',token:a.token,body:{ upToDate:'2027-02-28' } }),api('/api/delivery-subscriptions/generate-due',{ method:'POST',token:a.token,body:{ upToDate:'2027-02-28' } })]);assert.ok(calls.every(r=>r.status===200));assert.equal(calls.reduce((n,r)=>n+r.data.count,0),2);
+      const schedules=await api('/api/customer/subscriptions',{ token });assert.equal(schedules.data.find(s=>s.id===schedule.id).next_due_date,'2027-03-31');
+      assert.equal((await club(`subscriptions/${schedule.id}/pause`,{ requestKey:'other-pause-0001' },ct)).status,404);
+      assert.equal((await proxy(`subscriptions/${schedule.id}/pause`,'POST',{ requestKey:'pause-schedule-0001' })).status,200);
+      assert.equal((await proxy(`subscriptions/${schedule.id}/resume`,'POST',{ requestKey:'resume-schedule-0001' })).status,200);
+      const skipped=await proxy(`subscriptions/${schedule.id}/skip`,'POST',{ requestKey:'skip-schedule-0001' });assert.equal(skipped.status,200);
+      const skippedAgain=await proxy(`subscriptions/${schedule.id}/skip`,'POST',{ requestKey:'skip-schedule-0001' });assert.equal(skippedAgain.status,200);assert.equal(skippedAgain.data.data.next_due_date,skipped.data.data.next_due_date);
+      assert.equal((await proxy(`subscriptions/${schedule.id}/cancel`,'POST',{ requestKey:'cancel-schedule-0001' })).status,200);
+      assert.equal((await proxy(`subscriptions/${schedule.id}/resume`,'POST',{ requestKey:'resume-schedule-0002' })).status,400);
+    });
+  });
   await t.test('expired customer session rejected', async () => {
     await sql("UPDATE sessions SET expires_at = datetime('now', '-1 day') WHERE token = ?", [token]);
     assert.equal((await api('/api/customer/me', { token })).status, 401);
