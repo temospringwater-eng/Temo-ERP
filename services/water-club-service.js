@@ -27,6 +27,9 @@ function createWaterClubService({ dbPath }) {
       ,`CREATE TABLE IF NOT EXISTS water_club_redemptions (company_id INTEGER NOT NULL, order_id INTEGER NOT NULL, lot_id INTEGER NOT NULL, points INTEGER NOT NULL, PRIMARY KEY(company_id,order_id,lot_id))`
     ];
     for (const sql of statements) await run(sql);
+    await run(`CREATE TABLE IF NOT EXISTS water_club_commercial_terms (
+      company_id INTEGER PRIMARY KEY, security_amount REAL, delivery_terms TEXT NOT NULL DEFAULT '',
+      security_terms TEXT NOT NULL DEFAULT '', updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
   })();
   ready.catch(() => {});
   function transaction(fn) {
@@ -264,6 +267,31 @@ function createWaterClubService({ dbPath }) {
     route('get', '/api/customer/water-club/deliveries', requireCustomer, async req => { await sync(req, req.user.customer_id); return all('SELECT d.id,d.order_id,d.status,d.scheduled_date,d.delivered_at FROM deliveries d JOIN orders o ON o.id = d.order_id AND o.company_id = d.company_id WHERE o.company_id = ? AND o.customer_id = ? ORDER BY d.id DESC LIMIT 100', [req.companyId, req.user.customer_id]); });
     route('get', '/api/water-club/admin', requireRole(...roles), req => all('SELECT m.*,c.name,c.phone FROM water_club_members m JOIN customers c ON c.id = m.customer_id AND c.company_id = m.company_id WHERE m.company_id = ? ORDER BY m.joined_at DESC', [req.companyId]));
     route('get', '/api/water-club/admin/config', requireRole(...roles), async req => ({ settings: await settings(req.companyId), products: await all('SELECT * FROM water_club_products WHERE company_id = ?', [req.companyId]) }));
+    // Commercial terms are company-owned preparation records. They do not
+    // rewrite historical payments, deposits or order totals.
+    route('get', '/api/water-club/admin/commercial', requireRole(...roles), async req =>
+      await one('SELECT * FROM water_club_commercial_terms WHERE company_id = ?', [req.companyId]) ||
+      { company_id: req.companyId, security_amount: null, security_terms: '', delivery_terms: '' });
+    route('post', '/api/water-club/admin/commercial', requireRole('super_admin','company_admin'), async req => {
+      const b = req.body || {};
+      const amount = b.securityAmount;
+      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || amount > 10000000 || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) fail('Enter a non-negative security amount with at most two decimals.');
+      if (typeof b.securityTerms !== 'string' || typeof b.deliveryTerms !== 'string' || !b.securityTerms.trim() || !b.deliveryTerms.trim() || b.securityTerms.length > 2000 || b.deliveryTerms.length > 2000) fail('Security and delivery terms are required (maximum 2000 characters each).');
+      await run(`INSERT INTO water_club_commercial_terms(company_id,security_amount,security_terms,delivery_terms) VALUES(?,?,?,?)
+        ON CONFLICT(company_id) DO UPDATE SET security_amount=excluded.security_amount,security_terms=excluded.security_terms,delivery_terms=excluded.delivery_terms,updated_at=CURRENT_TIMESTAMP`,
+        [req.companyId,amount,b.securityTerms.trim(),b.deliveryTerms.trim()]);
+      await audit(req,'water_club_commercial_terms','company',req.companyId,{ securityAmount:amount,securityTerms:b.securityTerms,deliveryTerms:b.deliveryTerms });
+      return { success:true };
+    });
+    route('post', '/api/water-club/admin/prices', requireRole('super_admin','company_admin'), async req => {
+      const b = req.body || {}, price = b.salePrice;
+      if (!Number.isInteger(b.productId) || typeof price !== 'number' || !Number.isFinite(price) || price <= 0 || price > 10000000 || Math.abs(price * 100 - Math.round(price * 100)) > 0.000001) fail('Choose a product and a positive price with at most two decimals.');
+      const before = await one('SELECT sale_price FROM products WHERE id = ? AND company_id = ?', [b.productId,req.companyId]);
+      if (!before) fail('Company product not found.',404);
+      await run('UPDATE products SET sale_price = ? WHERE id = ? AND company_id = ?', [price,b.productId,req.companyId]);
+      await audit(req,'water_club_price','product',b.productId,{ previous:before.sale_price,salePrice:price });
+      return { success:true };
+    });
     route('post', '/api/water-club/admin/settings', requireRole(...roles), async req => {
       const b = req.body || {}, values = [Number(b.firstBonus),Number(b.referralPoints),Number(b.redemptionPoints)];
       if (values.some(v => !Number.isInteger(v) || v < 0 || v > 10000) || !values[2]) fail('Invalid point settings.');
@@ -373,3 +401,4 @@ function createWaterClubService({ dbPath }) {
   return { registerRoutes, generateDue, nextDate, setOrderStatus, syncCustomer: req => transaction(() => sync(req, req.user.customer_id)), syncOrder: (req, id) => transaction(async () => { const o = await one('SELECT customer_id FROM water_club_orders WHERE company_id = ? AND order_id = ?', [req.companyId,id]); if(o) await sync(req,o.customer_id); }), isClubOrder: async (company,id) => { await ready; return Boolean(await one('SELECT order_id FROM water_club_orders WHERE company_id = ? AND order_id = ?', [company,id])); } };
 }
 module.exports = { createWaterClubService };
+

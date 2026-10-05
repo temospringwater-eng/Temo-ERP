@@ -6,8 +6,11 @@
   function row(target,values,action){const tr=document.createElement('tr');for(const value of values){const td=document.createElement('td');td.textContent=value;tr.append(td);}const td=document.createElement('td');action(td);tr.append(td);target.append(tr);}
   function button(target,label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await fn();message('Saved.');await load();}catch(e){message(e.message);b.disabled=false;}};target.append(b);}
   async function load(){
-    const [products,members,orders,config]=await Promise.all([api('products'),api('water-club/admin'),api('water-club/admin/orders'),api('water-club/admin/config')]);
+    const [products,members,orders,config,commercial]=await Promise.all([api('products'),api('water-club/admin'),api('water-club/admin/orders'),api('water-club/admin/config'),api('water-club/admin/commercial')]);
     const selected=$('products').value;$('products').replaceChildren();for(const p of products){const o=document.createElement('option');o.value=p.id;o.textContent=p.name+' · '+p.sale_price+' PKR';$('products').append(o);}if([...$('products').options].some(o=>o.value===selected))$('products').value=selected;
+    $('price-products').replaceChildren();for(const p of products){const o=document.createElement('option');o.value=p.id;o.textContent=`${p.name} · price ${p.sale_price} · stock ${p.stock}`;o.dataset.price=p.sale_price;$('price-products').append(o);}
+    $('price-products').onchange=()=>{$('prices').elements.salePrice.value=$('price-products').selectedOptions[0]?.dataset.price||'';};$('price-products').onchange();
+    for(const [key,col] of [['securityAmount','security_amount'],['securityTerms','security_terms'],['deliveryTerms','delivery_terms']])$('commercial').elements[key].value=commercial[col]??'';
     $('configured').replaceChildren();for(const p of config.products){const line=document.createElement('p');line.textContent=`Product #${p.product_id}: ${p.kind}, ${p.points} points per ${p.units_per_reward} units`;button(line,p.active?'Disable':'Enable',()=>api('water-club/admin/products','POST',{productId:p.product_id,kind:p.kind,points:p.points,unitsPerReward:p.units_per_reward,active:!p.active}));$('configured').append(line);}
     for(const [key,col] of [['firstBonus','first_bonus'],['referralPoints','referral_points'],['redemptionPoints','redemption_points']])$('settings').elements[key].value=config.settings[col];
     $('members').replaceChildren();for(const m of members)row($('members'),[m.name+' (#'+m.customer_id+')',m.plan,m.rewards_enabled?'Enabled':'Disabled'],td=>button(td,m.rewards_enabled?'Disable rewards':'Enable rewards',()=>api('water-club/admin/members/'+m.customer_id,'POST',{rewardsEnabled:!m.rewards_enabled})));
@@ -15,9 +18,12 @@
   }
   function form(id,path,transform=b=>b){let retry;$(id).onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;const body=transform(Object.fromEntries(new FormData(e.currentTarget))),signature=JSON.stringify(body);if(!retry||retry.signature!==signature)retry={signature,key:crypto.randomUUID()};try{await api(typeof path==='function'?path(body):path,'POST',{...body,requestKey:retry.key});retry=null;message('Saved.');await load();}catch(e){message(e.message);}finally{b.disabled=false;}};}
   form('catalog','water-club/admin/products',b=>({...b,productId:Number(b.productId),points:Number(b.points),unitsPerReward:Number(b.unitsPerReward)}));
+  form('prices','water-club/admin/prices',b=>({...b,productId:Number(b.productId),salePrice:Number(b.salePrice)}));
+  form('commercial','water-club/admin/commercial',b=>({...b,securityAmount:Number(b.securityAmount)}));
   form('settings','water-club/admin/settings',b=>Object.fromEntries(Object.entries(b).map(([k,v])=>[k,Number(v)])));
   form('payment',b=>'water-club/admin/orders/'+b.orderId+'/payment',b=>({...b,amount:Number(b.amount)}));
   form('adjust',b=>'water-club/admin/members/'+b.customerId+'/points',b=>({...b,points:Number(b.points)}));
   $('generate').onclick=async()=>{$('generate').disabled=true;try{const r=await api('delivery-subscriptions/generate-due','POST',{});message(r.count+' orders generated.');await load();}catch(e){message(e.message);}finally{$('generate').disabled=false;}};
   load().catch(e=>message(e.message));
 })();
+

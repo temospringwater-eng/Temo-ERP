@@ -30,3 +30,8 @@ Cross-repository local test: set `WC_WORKER_PATH` to the absolute website `backe
 4. Verify real browser/mobile flows, HTTPS cookies, SMTP/OTP/payment provider delivery, online driver/proof/offline flows and persistence across restart/redeploy. Payments here are manually verified ERP records, not automatic bank settlement/webhooks.
 5. Test full SQLite backup/restore plus uploads. Existing generic driver routes update delivery state before reconciliation; failure during reconciliation requires admin review/retry. Driver OTP/signature requirements remain in existing driver action routes and were not replaced or fully retested here.
 6. Owner approval before production merge or go-live.
+
+
+## Pre-salary preparation update
+
+See WATER-CLUB-PRELAUNCH.md for company-controlled pricing/security terms, OTP provider preparation, and the online/backup acceptance matrix. Current local suite: 30/30 passed on 5 October 2026 (includes parent tests); OTP checks use a mocked provider and no SMS. No browser, online restore, deposit checkout or signup activation success is claimed.

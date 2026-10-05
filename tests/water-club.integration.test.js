@@ -198,6 +198,26 @@ test('Water Club API integration with disposable SQLite database', async (t) => 
       assert.equal((await club('membership',{ plan:'home' },other.data.token)).status,200);
       assert.equal((await club('referrals',{ code },other.data.token)).status,400);
     });
+    await t.test('Company prices and security terms stay isolated and preserve placed orders',async()=>{
+      const otherAdmin=(await api('/api/login',{method:'POST',body:{username:'test_b',password:'Reset-Test-8372'}})).data.token;
+      const original=await club('orders',{items:[{productId:p.id,quantity:1}],requestKey:'price-snapshot-001'},token);
+      assert.equal(original.status,200);assert.equal(original.data.total_amount,300);
+      const save=(session,body)=>api('/api/water-club/admin/prices',{method:'POST',token:session,body});
+      assert.equal((await save(token,{productId:p.id,salePrice:310})).status,403);
+      assert.equal((await save(otherAdmin,{productId:p.id,salePrice:310})).status,404);
+      for(const salePrice of [-1,0,1.001,'310',null])assert.equal((await save(a.token,{productId:p.id,salePrice})).status,400);
+      assert.equal((await save(a.token,{productId:p.id,salePrice:310})).status,200);
+      const catalog=await api('/api/customer/water-club/catalog',{token});assert.equal(catalog.data.find(x=>x.id===p.id).sale_price,310);
+      const order=await club('orders',{items:[{productId:p.id,quantity:1}],requestKey:'price-snapshot-002'},token);assert.equal(order.data.total_amount,310);
+      const orders=await api('/api/water-club/admin/orders',{token:a.token});assert.equal(orders.data.find(x=>x.order_id===original.data.id).total_amount,300);
+      const commercial={securityAmount:900,securityTerms:'Refund after verified bottle return.',deliveryTerms:'Pilot area delivery 50; outside area quote required.'};
+      assert.equal((await api('/api/water-club/admin/commercial',{method:'POST',token:a.token,body:commercial})).status,200);
+      assert.equal((await api('/api/water-club/admin/commercial',{token:a.token})).data.security_amount,900);
+      assert.equal((await api('/api/water-club/admin/commercial',{token:otherAdmin})).data.security_amount,null);
+      assert.equal((await api('/api/water-club/admin/commercial',{method:'POST',token,body:commercial})).status,403);
+      assert.equal((await api('/api/water-club/admin/commercial',{method:'POST',token:a.token,body:{...commercial,securityAmount:-1}})).status,400);
+      await save(a.token,{productId:p.id,salePrice:300});
+    });
     let first,second,large,reward;
     await t.test('No points until full payment AND delivery; repeated events are safe',async()=>{
       const r = await proxy('orders','POST',{ items:[{ productId:p.id,quantity:1,unitPrice:1 }],requestKey:'first-order-0001' });assert.equal(r.status,200,JSON.stringify(r.data));first=r.data.data;assert.equal(first.total_amount,300);
@@ -270,3 +290,4 @@ test('Water Club API integration with disposable SQLite database', async (t) => 
     assert.equal((await api('/api/customer/me', { token: fresh.data.token })).status, 401);
   });
 });
+
