@@ -9,6 +9,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -61,6 +63,14 @@ public final class MainActivity extends Activity {
     private Spinner paymentPicker;
     private SignaturePad pad;
     private TextView photoStatus;
+    private ConnectivityManager connectivityManager;
+    private boolean networkCallbackRegistered = false;
+    private boolean automaticSyncRunning = false;
+    private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+        @Override public void onAvailable(Network network) {
+            runOnUiThread(() -> syncWhenConnected());
+        }
+    };
 
     interface Work { void run() throws Exception; }
     private void background(Work job, Runnable success, Runnable failure) {
@@ -82,6 +92,13 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.BLACK);
         serverUrl = getPreferences(MODE_PRIVATE).getString("server", "");
         welcome();
+        connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (connectivityManager != null) {
+            try {
+                connectivityManager.registerDefaultNetworkCallback(networkCallback);
+                networkCallbackRegistered = true;
+            } catch (RuntimeException ignored) { /* Manual Sync remains available. */ }
+        }
     }
     private LinearLayout page(String title, String description) {
         LinearLayout content = new LinearLayout(this);
@@ -214,7 +231,10 @@ public final class MainActivity extends Activity {
                 result[0] = cache.cached(showHistory);
                 cached[0] = true;
             }
-        }, () -> home(result[0], cached[0]), () -> home(cache.cached(showHistory), true));
+        }, () -> {
+            home(result[0], cached[0]);
+            if (!cached[0]) syncWhenConnected();
+        }, () -> home(cache.cached(showHistory), true));
     }
 
     private void deliveryDetail() {
@@ -259,6 +279,33 @@ public final class MainActivity extends Activity {
         });
         action(box, "Back", this::deliveryDetail);
     }
+    // Sync only while the app is active; never silently discard failed operations.
+    // A network callback retries the driver-scoped queue when internet returns.
+    private void syncWhenConnected() {
+        if (api == null || driver == null || cache == null || automaticSyncRunning || cache.queuedCount() == 0) return;
+        automaticSyncRunning = true;
+        final DriverApi currentApi = api;
+        final DriverCache currentCache = cache;
+        io.execute(() -> {
+            int applied = 0;
+            try {
+                JSONArray batch = currentCache.sendable();
+                if (batch.length() > 0) {
+                    JSONObject response = currentApi.post("/api/driver/offline-sync", new JSONObject().put("operations", batch));
+                    JSONArray results = response.optJSONArray("results");
+                    applied = currentCache.applyResults(results == null ? new JSONArray() : results);
+                }
+            } catch (Exception ignored) {
+                // Retain pending entries; the next network event or manual Sync retries them.
+            }
+            final int completed = applied;
+            runOnUiThread(() -> {
+                automaticSyncRunning = false;
+                if (currentCache == cache && completed > 0) toast(completed + " saved updates synced automatically.");
+            });
+        });
+    }
+
     private void sync() {
         if (api == null || cache == null) return;
         working("Syncing saved updates...");
@@ -398,7 +445,15 @@ public final class MainActivity extends Activity {
             .setNegativeButton("Cancel", null).show();
         else super.onBackPressed();
     }
-    @Override protected void onDestroy() { io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onResume() { super.onResume(); syncWhenConnected(); }
+    @Override protected void onDestroy() {
+        if (networkCallbackRegistered && connectivityManager != null) {
+            try { connectivityManager.unregisterNetworkCallback(networkCallback); }
+            catch (RuntimeException ignored) { /* Activity is already stopping. */ }
+        }
+        io.shutdownNow();
+        super.onDestroy();
+    }
 
     private final class SignaturePad extends View {
         private final Paint ink = new Paint(3);
