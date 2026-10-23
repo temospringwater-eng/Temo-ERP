@@ -7,7 +7,7 @@ on:
       - ".github/workflows/android-driver-build.yml"
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build-android-debug:
     runs-on: ubuntu-latest
@@ -32,8 +32,20 @@ jobs:
         run: |
           test -s android-driver/app/build/outputs/apk/debug/app-debug.apk
           sha256sum android-driver/app/build/outputs/apk/debug/app-debug.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: temo-driver-qa-apk
-          path: android-driver/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 1
+      - name: Publish QA APK to private QA branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'recovery/complete-source-2026-10-23'
+        run: |
+          set -euo pipefail
+          cp android-driver/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/TEMO-Driver-QA.apk"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin refs/heads/qa/driver-apk-2026-10-23
+          git switch -C qa/driver-apk-2026-10-23 FETCH_HEAD
+          mkdir -p qa
+          cp "$RUNNER_TEMP/TEMO-Driver-QA.apk" qa/TEMO-Driver-QA.apk
+          sha256sum qa/TEMO-Driver-QA.apk > qa/TEMO-Driver-QA.apk.sha256
+          git add qa/TEMO-Driver-QA.apk qa/TEMO-Driver-QA.apk.sha256
+          if ! git diff --cached --quiet; then
+            git commit -m "build(android): publish latest private driver QA APK"
+            git push origin HEAD:refs/heads/qa/driver-apk-2026-10-23
+          fi
