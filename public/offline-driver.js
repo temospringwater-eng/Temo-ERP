@@ -5,6 +5,7 @@
   const QUEUE = 'operations';
   const CACHE = 'deliveryCache';
   const FALLBACK_KEY = 'temo_aquaflow_offline_driver_queue';
+  const FALLBACK_CACHE_KEY = 'temo_aquaflow_driver_delivery_cache';
   let dbPromise;
   let listeners = [];
 
@@ -26,6 +27,8 @@
   function notify() { return count().then((pending) => listeners.forEach((listener) => listener({ online: navigator.onLine, pending }))); }
   function fallbackRead() { try { return JSON.parse(localStorage.getItem(FALLBACK_KEY) || '[]'); } catch (_) { return []; } }
   function fallbackWrite(items) { localStorage.setItem(FALLBACK_KEY, JSON.stringify(items)); }
+  function fallbackCacheRead() { try { return JSON.parse(localStorage.getItem(FALLBACK_CACHE_KEY) || '{}'); } catch (_) { return {}; } }
+  function fallbackCacheWrite(cache) { localStorage.setItem(FALLBACK_CACHE_KEY, JSON.stringify(cache)); }
   function transaction(store, mode, action) { return openDb().then((db) => new Promise((resolve, reject) => {
     if (!db) return resolve(null);
     const request = action(db.transaction(store, mode).objectStore(store));
@@ -38,21 +41,25 @@
 
   async function count() { const db = await openDb(); if (!db) return fallbackRead().length; return (await all(QUEUE)).length; }
   async function queueAction(operation) {
+    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(String(operation?.idempotencyKey || ''))) throw new Error('A valid idempotency key is required before saving an offline delivery.');
     const value = { ...operation, id: operation.id || `${operation.idempotencyKey}`, createdAt: operation.createdAt || new Date().toISOString(), state: 'pending' };
     const db = await openDb();
     if (!db) { const items = fallbackRead().filter((item) => item.id !== value.id); items.push(value); fallbackWrite(items); await notify(); return value; }
     await put(QUEUE, value); await notify(); return value;
   }
   async function cacheDeliveries(date, deliveries, history) {
-    await put(CACHE, { key: `deliveries:${date}`, date, deliveries: deliveries || [], history: history || [], cachedAt: new Date().toISOString() });
+    const entry = { key: `deliveries:${date}`, date, deliveries: deliveries || [], history: history || [], cachedAt: new Date().toISOString() };
+    if (!(await openDb())) { const cache = fallbackCacheRead(); cache[entry.key] = entry; fallbackCacheWrite(cache); return; }
+    await put(CACHE, entry);
   }
-  async function getCachedDeliveries(date) { const db = await openDb(); if (!db) return fallbackRead().find((item) => item.key === `deliveries:${date}`) || null; return transaction(CACHE, 'readonly', (store) => store.get(`deliveries:${date}`)); }
+  async function getCachedDeliveries(date) { const db = await openDb(); if (!db) return fallbackCacheRead()[`deliveries:${date}`] || null; return transaction(CACHE, 'readonly', (store) => store.get(`deliveries:${date}`)); }
   async function sync() {
     if (!navigator.onLine) return { synced: 0, conflicts: 0 };
     const db = await openDb();
     const items = db ? await all(QUEUE) : fallbackRead();
     if (!items.length) { await notify(); return { synced: 0, conflicts: 0 }; }
-    const pending = items.filter((item) => item.state !== 'conflict');
+    const pending = items.filter((item) => item.state === 'pending');
+    const fallbackItems = db ? null : new Map(items.map((item) => [item.id, item]));
     let synced = 0; let conflicts = 0;
     for (let index = 0; index < pending.length; index += 100) {
       const batch = pending.slice(index, index + 100);
@@ -64,10 +71,20 @@
       for (const result of (data.results || [])) {
         const item = batch.find((candidate) => candidate.idempotencyKey === result.idempotencyKey);
         if (!item) continue;
-        if (result.status === 'conflict') { item.state = 'conflict'; item.error = result.message || result.code; conflicts += 1; if (db) await put(QUEUE, item); }
-        else if (result.status === 'applied' || result.status === 'failed') { synced += result.status === 'applied' ? 1 : 0; if (db) await remove(QUEUE, item.id); }
+        if (result.status === 'conflict' || result.status === 'failed') {
+          item.state = result.status;
+          item.error = result.message || result.code;
+          if (result.status === 'conflict') conflicts += 1;
+          if (db) await put(QUEUE, item);
+          else fallbackItems.set(item.id, item);
+        } else if (result.status === 'applied') {
+          synced += 1;
+          if (db) await remove(QUEUE, item.id);
+          else fallbackItems.delete(item.id);
+        }
       }
-      if (!db) fallbackWrite(items.filter((item) => item.state === 'conflict'));
+      // Retain unacknowledged, unsent and rejected operations for review/retry.
+      if (!db) fallbackWrite([...fallbackItems.values()]);
     }
     await notify(); return { synced, conflicts };
   }
