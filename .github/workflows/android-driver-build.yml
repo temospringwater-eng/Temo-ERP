@@ -66,3 +66,15 @@ jobs:
             adb shell am start -W -n com.temo.aquaflow.driver/.MainActivity
             sleep 5
             adb shell pidof com.temo.aquaflow.driver
+            # Simulate runtime location authorization (this does not assert a live GPS fix).
+            adb shell pm grant com.temo.aquaflow.driver android.permission.ACCESS_FINE_LOCATION
+            adb shell pm check-permission com.temo.aquaflow.driver android.permission.ACCESS_FINE_LOCATION
+            # Confirm that a cold restart works with connectivity disabled.
+            adb shell svc wifi disable
+            adb shell svc data disable
+            adb shell am force-stop com.temo.aquaflow.driver
+            adb shell am start -W -n com.temo.aquaflow.driver/.MainActivity
+            sleep 3
+            adb shell pidof com.temo.aquaflow.driver
+            adb shell svc wifi enable
+            adb shell svc data enable
