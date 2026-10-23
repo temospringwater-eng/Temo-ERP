@@ -107,6 +107,7 @@ final class DriverApi {
             return new JSONObject().put("items", new JSONArray(payload));
         } finally { conn.disconnect(); }
     }
+    JSONArray list(String route) throws Exception { return getWrappedArray(route).getJSONArray("items"); }
     JSONObject post(String route, JSONObject payload) throws Exception { return send("POST", route, payload.toString(), false); }
     JSONObject upload(int deliveryId, String kind, String encoded) throws Exception {
         return post("/api/driver/deliveries/" + deliveryId + "/proof-upload",
