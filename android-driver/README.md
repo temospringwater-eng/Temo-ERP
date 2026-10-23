@@ -12,10 +12,10 @@ The app has Android-native Login, My Deliveries, Delivery Detail, Start, Complet
 - A temporary test gate is unlocked through native HTTPS requests; no Cloudflare login page is displayed.
 - "Complete" requires a real customer 6-digit OTP and signature, as the ERP backend demands.
 - Proof photos/signatures are uploaded over authenticated HTTPS to the ERP's server-private `TEMO_PROOF_STORAGE_DIR` location. Production needs a durable private volume and a retention policy.
-- When offline, assigned deliveries last fetched can be viewed, and `start` / `fail` operations are stored locally with idempotency keys; manually sync on reconnection. Do not assume offline completion is possible without the server-issued OTP and uploaded proof.
+- When offline, assigned deliveries last fetched can be viewed, and `start` / `fail` operations are stored locally with idempotency keys. While the app process is running, reconnection automatically retries pending updates; manual Sync remains available. Conflicted/failed operations are retained for review. Do not assume offline completion is possible without the server-issued OTP and uploaded proof.
 
 ## Limitations that must be resolved before Go-Live
-- Native background sync and push notifications are **not implemented**; sync is manually triggered.
+- Android background-service sync and push notifications are **not implemented**. Auto-sync is limited to network reconnection while the app process is active, or returning to the running app; manual sync remains available.
 - A customer OTP delivery channel (customer portal/SMS integration) must be connected and tested; a driver OTP request does not itself send an SMS in the current backend.
 - Driver GPS tracking, custom per-driver admin permissions, offline customer creation, and production-signed release need separate implementation and testing.
 - Native device runtime integration test and full backend API validation **must be green**; do not release purely from source checks.
