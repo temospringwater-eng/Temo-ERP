@@ -22,7 +22,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Launch disposable ERP and email-protected HTTPS tunnel
+      - name: Launch disposable ERP with private access-code gate and HTTPS tunnel
         shell: bash
         run: |
           set -euo pipefail
@@ -32,6 +32,8 @@ jobs:
           export DB_PATH="$RUNNER_TEMP/temo-phone-qa.db"
           export TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD="$(openssl rand -hex 24)"
           export TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          export TEMO_STAGING_GATE_SECRET="$(openssl rand -hex 24)"
+          export TEMO_REQUIRE_STAGING_GATE=true
           # These are CI-only disposable credentials. They are deliberately never printed.
           # A driver tester can register a dummy tenant via /api/signup.
           node server.js > "$RUNNER_TEMP/temo-server.log" 2>&1 &
@@ -55,7 +57,6 @@ jobs:
           chmod +x "$RUNNER_TEMP/cloudflared"
           "$RUNNER_TEMP/cloudflared" tunnel --no-autoupdate \
             --url http://127.0.0.1:3000 \
-            --allowed-mail "temospringwater@gmail.com" \
             > "$RUNNER_TEMP/temo-tunnel.log" 2>&1 &
           TUNNEL_PID=$!
           URL=""
@@ -68,8 +69,8 @@ jobs:
           if [ -z "$URL" ]; then tail -n 60 "$RUNNER_TEMP/temo-tunnel.log"; exit 1; fi
           echo "::notice title=TEMO TEMP HTTPS QA::$URL"
           echo "TEMP_TEST_URL=$URL" >> "$GITHUB_STEP_SUMMARY"
-          GH_TOKEN="${{ github.token }}" gh issue comment 2 --repo "$GITHUB_REPOSITORY" --body "Current temporary HTTPS QA: $URL (expires when GitHub workflow stops; login OTP only for temospringwater@gmail.com)."
-          echo "ONLY access via the email PIN for temospringwater@gmail.com."
+          GH_TOKEN="${{ github.token }}" gh issue comment 2 --repo "$GITHUB_REPOSITORY" --body "NEW temporary HTTPS QA URL: $URL\n\nTEMPORARY ACCESS CODE: \`$TEMO_STAGING_GATE_SECRET\`\n\nThis is an independent TEMO TEST access code (NOT a Cloudflare account, Gmail password or OTP). The URL and code expire when this GitHub job ends. Use only fictitious testing data."
+          echo "Private TEST access code is posted to private GitHub Issue #2; do not enter any real account passwords."
           echo "Test with fictitious customers, not production data. Temporary URL ends when this job finishes."
           for i in $(seq 1 2700); do
             if ! kill -0 "$ERP_PID" 2>/dev/null || ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
