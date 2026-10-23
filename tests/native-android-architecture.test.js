@@ -48,6 +48,7 @@ test('driver can review unsynced and rejected operations without clearing their 
   assert.match(ui, /Needs review:/);
   assert.match(ui, /Rejected updates are kept for manager review/);
   assert.match(queue, /Could not save offline update to this device/);
+  assert.match(queue, /Synced updates could not be confirmed on this device/);
   assert.match(queue, /if \(!prefs\.edit\(\)\.putString\("pending", old\.toString\(\)\)\.commit\(\)\)/);
 });
 
@@ -58,6 +59,8 @@ test('native QA APK is published only after a successful local emulator smoke', 
   assert.doesNotMatch(workflow, /\n  push:/);
   const smokeStep = workflow.indexOf('script: bash android-driver/scripts/qa-emulator-smoke.sh');
   const publishStep = workflow.indexOf('Upload native QA APK');
+  assert.match(workflow, /driver-native-qa-2026-10-23/);
+  assert.doesNotMatch(workflow, /gh release (?:view|create) driver-qa-2026-10-23/);
   assert.ok(smokeStep > 0 && publishStep > smokeStep, 'QA release must follow emulator smoke');
   assert.match(smoke, /app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
   assert.match(smoke, /Driver Login/);
