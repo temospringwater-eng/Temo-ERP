@@ -145,9 +145,13 @@ test('tenant-isolated order → assigned driver → OTP delivery → payment/bot
   const paymentsAfterRetry = await expect('/api/payments', a.token, 'GET', undefined, 200);
   assert.equal(paymentsAfterRetry.filter((p) => p.delivery_id === linked.id).length, 1);
 
-  const backup = await expect('/api/backups', a.token, 'POST', { scope: 'tenant' }, 201);
-  const validation = await expect(`/api/backups/${backup.id}/validate`, a.token, 'POST', {}, 200);
+  // Normal plans intentionally cannot use the advanced backup feature.
+  await expect('/api/backups', a.token, 'POST', { scope: 'tenant' }, 403);
+  const platformLogin = await expect('/api/login', null, 'POST', { username: 'superadmin', password: 'admin123' }, 200);
+  const backup = await expect('/api/backups', platformLogin.token, 'POST', { scope: 'full' }, 201);
+  const validation = await expect(`/api/backups/${backup.id}/validate`, platformLogin.token, 'POST', {}, 200);
   assert.equal(validation.valid, true);
   assert.equal(validation.restore.destructive, false);
-  await expect(`/api/backups/${backup.id}/validate`, b.token, 'POST', {}, 404);
+  // Tenant admin must not gain access to platform-wide backups.
+  await expect(`/api/backups/${backup.id}/validate`, b.token, 'POST', {}, 403);
 });
