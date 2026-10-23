@@ -17,6 +17,28 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Guard against committed runtime databases and secrets
+        run: |
+          python3 - <<'PY'
+          from pathlib import PurePosixPath
+          import subprocess
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          blocked = []
+          for item in tracked:
+              if not item:
+                  continue
+              name = PurePosixPath(item).name.lower()
+              env_secret = (name == '.env' or name.startswith('.env.')) and name != '.env.example'
+              data_file = name.endswith(('.db', '.db-wal', '.db-shm', '.sqlite', '.sqlite3'))
+              if env_secret or data_file:
+                  blocked.append(item)
+          if blocked:
+              print('FAIL: committed credentials or SQLite files detected:')
+              for item in blocked:
+                  print(' - ' + item)
+              raise SystemExit(1)
+          print('PASS: no tracked runtime DB or .env secret files')
+          PY
       - name: Check mandatory source files
         run: |
           test -f server.js
