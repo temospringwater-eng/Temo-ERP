@@ -29,6 +29,17 @@ test('native app exposes dedicated assigned deliveries, cash, bottles and offlin
   assert.match(queue, /"pending"\.equals/);
 });
 
+test('pending driver updates retry on reconnect without loading the ERP website', () => {
+  const ui = source('app/src/main/java/com/temo/aquaflow/driver/MainActivity.java');
+  const manifest = source('app/src/main/AndroidManifest.xml');
+  assert.match(manifest, /android.permission.ACCESS_NETWORK_STATE/);
+  assert.match(ui, /registerDefaultNetworkCallback\(networkCallback\)/);
+  assert.match(ui, /unregisterNetworkCallback\(networkCallback\)/);
+  assert.match(ui, /syncWhenConnected\(\)/);
+  assert.match(ui, /currentCache\.applyResults/);
+  assert.match(ui, /Retain pending entries/);
+});
+
 test('native app never requests broad camera storage or insecure HTTP permissions', () => {
   const manifest = source('app/src/main/AndroidManifest.xml');
   assert.match(manifest, /android:usesCleartextTraffic="false"/);
