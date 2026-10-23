@@ -2485,7 +2485,7 @@ app.post('/api/customers/:id/portal-access', requireRole(...customerPortalRoles)
     const customerId = Number(req.params.id); const customer = (await query('SELECT * FROM customers WHERE id = ? AND company_id = ?', [customerId, req.companyId]))[0];
     const email = String(req.body?.email || customer?.email || '').trim().toLowerCase(); const password = String(req.body?.password || '');
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
-    if (!/^\\S+@\\S+\\.\\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
     const username = `customer_${customerId}`; const existing = (await query('SELECT id FROM users WHERE (LOWER(email) = ? OR username = ?) AND id != COALESCE(?, -1)', [email, username, null]))[0];
     if (existing) return res.status(409).json({ message: 'That email or customer portal username is already in use.' });
     const linked = (await query('SELECT id FROM users WHERE customer_id = ? AND company_id = ?', [customerId, req.companyId]))[0];
