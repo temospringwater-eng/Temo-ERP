@@ -1,4 +1,5 @@
 name: TEMO Temporary Driver Phone QA (No Card)
+# Driver-role UI refresh: disposable test accounts will reset on this new run.
 on:
   push:
     branches: ["recovery/complete-source-2026-10-23"]
