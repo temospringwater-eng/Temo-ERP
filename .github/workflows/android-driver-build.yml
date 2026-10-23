@@ -1,17 +1,12 @@
 name: TEMO Driver Native QA APK
 on:
-  push:
-    branches: ["recovery/complete-source-2026-10-23"]
-    paths:
-      - "android-driver/**"
-      - ".github/workflows/android-driver-build.yml"
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
   build-android-debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -32,6 +27,37 @@ jobs:
         run: |
           test -s android-driver/app/build/outputs/apk/debug/app-debug.apk
           sha256sum android-driver/app/build/outputs/apk/debug/app-debug.apk
+      - name: Allow Android emulator acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Install and launch APK on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-boot-timeout: 300
+          script: |
+            set -euo pipefail
+            adb install -r "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
+            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
+            sleep 5
+            adb shell pidof com.temo.aquaflow.driver.nativeapp
+            # Simulate runtime location authorization (this does not assert a live GPS fix).
+            # Confirm that a cold restart works with connectivity disabled.
+            adb shell svc wifi disable
+            adb shell svc data disable
+            adb shell am force-stop com.temo.aquaflow.driver.nativeapp
+            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
+            sleep 3
+            adb shell pidof com.temo.aquaflow.driver.nativeapp
+            adb shell svc wifi enable
+            adb shell svc data enable
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb shell cat /sdcard/window.xml | grep -F 'TEMO DRIVER'
+            adb shell cat /sdcard/window.xml | grep -F 'Driver Login'
+
       - name: Upload native QA APK as private workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -40,7 +66,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Publish QA APK to private QA branch
-        if: github.ref == 'refs/heads/recovery/complete-source-2026-10-23' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: github.ref == 'refs/heads/recovery/complete-source-2026-10-23' && github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           cp android-driver/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
@@ -73,31 +99,3 @@ jobs:
               --prerelease
           fi
           gh release upload driver-qa-2026-10-23 "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk#TEMO-Driver-Native-QA.apk" --clobber
-      - name: Allow Android emulator acceleration
-        run: |
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Install and launch APK on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          disable-animations: true
-          emulator-boot-timeout: 300
-          script: |
-            adb install -r "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
-            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
-            sleep 5
-            adb shell pidof com.temo.aquaflow.driver.nativeapp
-            # Simulate runtime location authorization (this does not assert a live GPS fix).
-            # Confirm that a cold restart works with connectivity disabled.
-            adb shell svc wifi disable
-            adb shell svc data disable
-            adb shell am force-stop com.temo.aquaflow.driver.nativeapp
-            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
-            sleep 3
-            adb shell pidof com.temo.aquaflow.driver.nativeapp
-            adb shell svc wifi enable
-            adb shell svc data enable
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb shell cat /sdcard/window.xml | grep -F 'TEMO DRIVER'
