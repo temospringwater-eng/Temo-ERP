@@ -1,0 +1,74 @@
+name: TEMO Temporary Driver Phone QA (No Card)
+on:
+  push:
+    branches: ["recovery/complete-source-2026-10-23"]
+    paths:
+      - ".github/workflows/temporary-mobile-qa.yml"
+permissions:
+  contents: read
+jobs:
+  temporary-https-phone-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Launch disposable ERP and email-protected HTTPS tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export NODE_ENV=production
+          export PORT=3000
+          export DB_PATH="$RUNNER_TEMP/temo-phone-qa.db"
+          export TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD="$(openssl rand -hex 24)"
+          export TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          # These are CI-only disposable credentials. They are deliberately never printed.
+          # A driver tester can register a dummy tenant via /api/signup.
+          node server.js > "$RUNNER_TEMP/temo-server.log" 2>&1 &
+          ERP_PID=$!
+          TUNNEL_PID=""
+          cleanup() {
+            if [ -n "$TUNNEL_PID" ]; then kill "$TUNNEL_PID" 2>/dev/null || true; fi
+            kill "$ERP_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          ready=0
+          for i in $(seq 1 100); do
+            if curl --silent --fail http://127.0.0.1:3000/readiness > /dev/null; then ready=1; break; fi
+            if ! kill -0 "$ERP_PID" 2>/dev/null; then cat "$RUNNER_TEMP/temo-server.log"; exit 1; fi
+            sleep 1
+          done
+          test "$ready" = "1"
+          curl --fail --location --silent --show-error \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            --output "$RUNNER_TEMP/cloudflared"
+          chmod +x "$RUNNER_TEMP/cloudflared"
+          "$RUNNER_TEMP/cloudflared" tunnel --no-autoupdate \
+            --url http://127.0.0.1:3000 \
+            --allowed-mail "temospringwater@gmail.com" \
+            > "$RUNNER_TEMP/temo-tunnel.log" 2>&1 &
+          TUNNEL_PID=$!
+          URL=""
+          for i in $(seq 1 90); do
+            URL="$(grep -Eo 'https://[a-zA-Z0-9-]+[.]trycloudflare[.]com' "$RUNNER_TEMP/temo-tunnel.log" | head -n 1 || true)"
+            if [ -n "$URL" ]; then break; fi
+            if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then tail -n 60 "$RUNNER_TEMP/temo-tunnel.log"; exit 1; fi
+            sleep 1
+          done
+          if [ -z "$URL" ]; then tail -n 60 "$RUNNER_TEMP/temo-tunnel.log"; exit 1; fi
+          echo "::notice title=TEMO TEMP HTTPS QA::$URL"
+          echo "TEMP_TEST_URL=$URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "ONLY access via the email PIN for temospringwater@gmail.com."
+          echo "Test with fictitious customers, not production data. Temporary URL ends when this job finishes."
+          for i in $(seq 1 2700); do
+            if ! kill -0 "$ERP_PID" 2>/dev/null || ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+              echo "Temporary service exited unexpectedly"; exit 1
+            fi
+            sleep 1
+          done
