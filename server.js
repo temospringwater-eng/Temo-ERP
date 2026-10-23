@@ -37,6 +37,12 @@ const documentStorage = new DocumentStorageAdapter();
 const SUPPORTED_LANGUAGES = ['en', 'ur', 'ar'];
 
 app.use(express.json({ limit: '12mb' }));
+if (process.env.TEMO_STAGING_GATE_SECRET) {
+  if (process.env.NODE_ENV !== 'production') throw new Error('Staging access gate requires NODE_ENV=production');
+  app.set('trust proxy', 1);
+  app.use(express.urlencoded({ extended: false, limit: '2kb' }));
+  app.use(require('./services/staging-gate').createStagingGate(process.env.TEMO_STAGING_GATE_SECRET));
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 const runtimeMetrics = { requests: 0, errors: 0, startedAt: Date.now(), durationsMs: 0 };
