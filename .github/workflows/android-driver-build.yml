@@ -68,7 +68,7 @@ jobs:
             adb shell pidof com.temo.aquaflow.driver
             # Simulate runtime location authorization (this does not assert a live GPS fix).
             adb shell pm grant com.temo.aquaflow.driver android.permission.ACCESS_FINE_LOCATION
-            adb shell pm check-permission com.temo.aquaflow.driver android.permission.ACCESS_FINE_LOCATION
+            adb shell dumpsys package com.temo.aquaflow.driver | grep -F 'android.permission.ACCESS_FINE_LOCATION: granted=true'
             # Confirm that a cold restart works with connectivity disabled.
             adb shell svc wifi disable
             adb shell svc data disable
