@@ -61,7 +61,13 @@ test('notification delivery retry stops after successful or maximum attempts', a
     update: async () => { updates += 1; return { changes: 1 }; }
   });
 
-  test('payment proofs validate types and remain tenant-scoped', async () => {
+  const result = await service.retryFailedDelivery(7);
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, 'retry_limit_reached');
+  assert.equal(updates, 0);
+});
+
+test('payment proofs validate types and remain tenant-scoped', async () => {
     const admin = await login('admin');
     const invalid = await request('/api/subscription/payment-proofs', { method: 'POST', headers: { ...admin, 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: 'proof.exe', contentType: 'application/x-msdownload', dataBase64: Buffer.from('bad').toString('base64') }) });
     assert.equal(invalid.status, 400);
@@ -133,8 +139,4 @@ test('notification delivery retry stops after successful or maximum attempts', a
     const franchise = await request('/api/franchises', { headers: auth });
     assert.equal(franchise.status, 403);
   });
-  const result = await service.retryFailedDelivery(7);
-  assert.equal(result.skipped, true);
-  assert.equal(result.reason, 'retry_limit_reached');
-  assert.equal(updates, 0);
-});
+
