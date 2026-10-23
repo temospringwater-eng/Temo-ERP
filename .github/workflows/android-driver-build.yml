@@ -81,7 +81,7 @@ jobs:
             adb install -r "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
             adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
             sleep 5
-            adb shell pidof com.temo.aquaflow.driver.nativeapp.nativeapp
+            adb shell pidof com.temo.aquaflow.driver.nativeapp
             # Simulate runtime location authorization (this does not assert a live GPS fix).
             # Confirm that a cold restart works with connectivity disabled.
             adb shell svc wifi disable
