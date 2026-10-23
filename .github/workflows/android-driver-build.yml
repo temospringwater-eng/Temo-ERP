@@ -1,7 +1,7 @@
 name: TEMO Driver Android QA APK
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: ["recovery/complete-source-2026-10-23"]
     paths:
       - "android-driver/**"
       - ".github/workflows/android-driver-build.yml"
@@ -33,7 +33,7 @@ jobs:
           test -s android-driver/app/build/outputs/apk/debug/app-debug.apk
           sha256sum android-driver/app/build/outputs/apk/debug/app-debug.apk
       - name: Publish QA APK to private QA branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'recovery/complete-source-2026-10-23'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/recovery/complete-source-2026-10-23'
         run: |
           set -euo pipefail
           cp android-driver/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/TEMO-Driver-QA.apk"
