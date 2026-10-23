@@ -51,6 +51,20 @@ test('driver can review unsynced and rejected operations without clearing their 
   assert.match(queue, /if \(!prefs\.edit\(\)\.putString\("pending", old\.toString\(\)\)\.commit\(\)\)/);
 });
 
+test('native QA APK is published only after a successful local emulator smoke', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '..', '.github/workflows/android-driver-build.yml'), 'utf8');
+  const smoke = source('scripts/qa-emulator-smoke.sh');
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /\n  push:/);
+  const smokeStep = workflow.indexOf('script: bash android-driver/scripts/qa-emulator-smoke.sh');
+  const publishStep = workflow.indexOf('Upload native QA APK');
+  assert.ok(smokeStep > 0 && publishStep > smokeStep, 'QA release must follow emulator smoke');
+  assert.match(smoke, /app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
+  assert.match(smoke, /Driver Login/);
+  assert.match(smoke, /svc wifi disable/);
+  assert.match(smoke, /set -euo pipefail/);
+});
+
 test('native app never requests broad camera storage or insecure HTTP permissions', () => {
   const manifest = source('app/src/main/AndroidManifest.xml');
   assert.match(manifest, /android:usesCleartextTraffic="false"/);
