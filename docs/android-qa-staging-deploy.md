@@ -6,10 +6,10 @@ This page is for **authorized QA only**. It is not a live production deployment.
 
 1. Open the link in a phone browser signed into the Render account. If asked, connect Render's GitHub App to the **private** TEMO ERP repository and select the recovery branch.
 2. Review the `render.yaml` Blueprint carefully: **web**, free instance, Frankfurt region, manual deployments (`autoDeployTrigger: off`), and an **ephemeral**, throwaway SQLite database under `/tmp`.
-3. The Blueprint requests three secrets (`sync: false`). Enter distinct, randomly generated values **without committing them to GitHub**:
+3. The Blueprint requests **two secrets** (`sync: false`) without storing them in GitHub:
    - `TEMO_STAGING_GATE_SECRET`: 24+ characters, gives entry to the testing site
-   - `TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD`: 16+ characters, creates test `superadmin`
    - `TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD`: 16+ characters, creates test `admin`
+   - Render automatically generates a strong `TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD`; do not change it unless necessary.
 4. Confirm the Blueprint on Render, ensuring the pricing plan is **Free**; do not select a paid service.
 5. Once deployment status is **Live**, copy the actual `https://...onrender.com` address from Render. Enter the HTTPS origin (without trailing path) into the installed TEMO Driver APK.
 6. The APK should show **TEMO ERP — Private Test**. Enter the `TEMO_STAGING_GATE_SECRET` access code, then sign in with the test-only `admin` credentials. Create a `driver` test account through the ERP permissions/UI before driver-role delivery QA.
