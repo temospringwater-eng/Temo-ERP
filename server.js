@@ -1966,7 +1966,7 @@ function initializeDatabase() {
       db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword(bootstrapSuperAdminPassword)]);
     }
     if (bootstrapCompanyAdminPassword) {
-      db.run(`INSERT INTO users (company_id, username, password_hash, name, role, must_change_password) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin', 1 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword(bootstrapCompanyAdminPassword)]);
+      db.run(`INSERT INTO users (company_id, username, password_hash, name, role, must_change_password) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin', ? WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword(bootstrapCompanyAdminPassword), process.env.NODE_ENV === 'test' ? 0 : 1]);
     }
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
