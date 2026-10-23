@@ -72,11 +72,11 @@ jobs:
           set -euo pipefail
           unzip -t "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk" > /dev/null
           sha256sum "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
-          if ! gh release view driver-qa-2026-10-23 >/dev/null 2>&1; then
-            gh release create driver-qa-2026-10-23 \
+          if ! gh release view driver-native-qa-2026-10-23 >/dev/null 2>&1; then
+            gh release create driver-native-qa-2026-10-23 \
               --target "$GITHUB_SHA" \
               --title "TEMO Driver Native Android QA - internal test only" \
               --notes "Debug APK for authorized mobile testing only. Requires a trusted HTTPS TEMO ERP server. Not production signed." \
               --prerelease
           fi
-          gh release upload driver-qa-2026-10-23 "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk#TEMO-Driver-Native-QA.apk" --clobber
+          gh release upload driver-native-qa-2026-10-23 "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk#TEMO-Driver-Native-QA.apk" --clobber
