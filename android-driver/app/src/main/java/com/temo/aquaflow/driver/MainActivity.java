@@ -305,6 +305,8 @@ public final class MainActivity extends Activity {
         paymentPicker = picker(form, new String[]{"Cash", "Bank Transfer", "Other"});
         returnedBox = field(form, "Bottles returned", "0", InputType.TYPE_CLASS_NUMBER);
         emptyBox = field(form, "Empty bottles", "0", InputType.TYPE_CLASS_NUMBER);
+        line(form, "Bottle type (select if returning bottles)", 15);
+        bottlePicker = picker(form, new String[]{"No bottle type selected"});
         notesBox = field(form, "Delivery notes (optional)", "", InputType.TYPE_CLASS_TEXT);
         photoStatus = line(form, "Photo: optional", 15);
         action(form, "Add Proof Photo", () -> {
@@ -409,7 +411,7 @@ public final class MainActivity extends Activity {
             ink.setStyle(Paint.Style.STROKE); ink.setStrokeJoin(Paint.Join.ROUND); ink.setStrokeCap(Paint.Cap.ROUND);
         }
         @Override public boolean onTouchEvent(MotionEvent e) {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) { strokes.moveTo(e.getX(), e.getY()); signed = true; invalidate(); return true; }
+            if (e.getAction() == MotionEvent.ACTION_DOWN) { getParent().requestDisallowInterceptTouchEvent(true); strokes.moveTo(e.getX(), e.getY()); signed = true; invalidate(); return true; }
             if (e.getAction() == MotionEvent.ACTION_MOVE) { strokes.lineTo(e.getX(), e.getY()); invalidate(); return true; }
             if (e.getAction() == MotionEvent.ACTION_UP) { strokes.lineTo(e.getX(), e.getY()); invalidate(); return true; }
             return true;
