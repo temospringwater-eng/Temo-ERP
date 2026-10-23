@@ -20,7 +20,7 @@ This free alternative uses the laptop's internet to download dependencies and re
 
 ## Manual GitHub QA workflow (when Actions minutes are available)
 
-The GitHub workflow **TEMO Driver Native QA APK** is manual-only (`workflow_dispatch`) to preserve the private account's limited Actions minutes. It builds the APK and performs a disposable Android 35 emulator launch plus offline cold restart using `android-driver/scripts/qa-emulator-smoke.sh` **before** it uploads or publishes any QA APK. A smoke-test failure must block publication.
+The GitHub workflow **TEMO Driver Native QA APK** is manual-only (`workflow_dispatch`) to preserve the private account's limited Actions minutes. It builds the APK and performs a disposable Android 35 emulator launch plus offline cold restart using `android-driver/scripts/qa-emulator-smoke.sh` **before** it uploads or publishes any QA APK. The private native release uses the **`driver-native-qa-2026-10-23`** tag, distinct from the obsolete 12KB browser-wrapper release (`driver-qa-2026-10-23`). A smoke-test failure must block publication.
 
 These smoke tests **do not** validate driver login against a real HTTPS server, assigned deliveries, OTP delivery, cash/bottle ledger, or offline authenticated re-login. Do not call the APK production-ready without separate end-to-end QA.
 
