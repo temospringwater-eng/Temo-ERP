@@ -1,0 +1,24 @@
+# Internal TEMO Driver QA only. The web URL is reachable on the internet,
+# but all application/API routes are protected by the staging access gate.
+# Free instance storage is ephemeral: NEVER use for customer/production data.
+services:
+  - type: web
+    name: temo-erp-driver-qa-20261023
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: recovery/complete-source-2026-10-23
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /tmp/temo-driver-qa-only.sqlite
+      - key: TEMO_STAGING_GATE_SECRET
+        sync: false
+      - key: TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD
+        sync: false
+      - key: TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD
+        sync: false
