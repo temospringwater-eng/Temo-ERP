@@ -54,21 +54,6 @@ app.use((req, res, next) => {
     }
   });
 
-  app.post('/api/me/password', async (req, res) => {
-    try {
-      const currentPassword = String(req.body?.currentPassword || '');
-      const newPassword = String(req.body?.newPassword || '');
-      const confirmPassword = String(req.body?.confirmPassword || '');
-      const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
-      if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
-      if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
-      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
-      await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
-      res.json({ success: true, mustChangePassword: false });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Unable to change password.' });
-    }
-  });
   next();
 });
 
@@ -2740,6 +2725,22 @@ app.post('/api/reset-password', async (req, res) => {
     res.json({ success: true, message: 'Password reset successfully.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/me/password', async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+    const user = (await query('SELECT password_hash FROM users WHERE id = ?', [req.user.id]))[0];
+    if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
+    await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', [hashPassword(newPassword), req.user.id]);
+    await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
+    res.json({ success: true, mustChangePassword: false });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Unable to change password.' });
   }
 });
 
