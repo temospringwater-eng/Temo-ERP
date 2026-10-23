@@ -24,6 +24,9 @@ jobs:
           test -f services/forecasting-service.js
           test -f services/platform-operations-service.js
           test -f tests/api-smoke.test.js
+      - name: Verify JavaScript syntax
+        run: |
+          find services public tests -name '*.js' -type f -print0 | xargs -0 -r -n1 node --check
       - name: Install dependencies
         run: npm ci
       - name: Run automated tests
