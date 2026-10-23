@@ -30,4 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run automated tests
+        # Ephemeral CI database only. Never use these sample credentials outside NODE_ENV=test.
+        env:
+          NODE_ENV: test
+          TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: admin123
+          TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: admin123
         run: npm test
