@@ -84,6 +84,45 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(Buffer.from(actualHash, 'hex'), Buffer.from(expectedHash, 'hex'));
 }
 
+// Bootstrap credentials must be supplied out-of-band; never seed public default passwords.
+function readBootstrapPassword(name) {
+  const password = String(process.env[name] || '');
+  if (!password) return null;
+  if (process.env.NODE_ENV !== 'test' && (password.length < 16 || password === 'admin123')) {
+    throw new Error(`${name} must contain at least 16 characters and cannot be a known default.`);
+  }
+  return password;
+}
+
+const bootstrapSuperAdminPassword = readBootstrapPassword('TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD');
+const bootstrapCompanyAdminPassword = readBootstrapPassword('TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD');
+if (process.env.NODE_ENV !== 'test' && bootstrapSuperAdminPassword && bootstrapSuperAdminPassword === bootstrapCompanyAdminPassword) {
+  throw new Error('Bootstrap super admin and company admin passwords must be different.');
+}
+
+// Migrate known credentials only when an explicit secure replacement is provided.
+// Without one, refuse to expose an existing weak admin account over HTTP.
+async function ensureSecureAdminBootstrap() {
+  const admins = await query(`SELECT id, username, role, password_hash FROM users
+    WHERE username IN ('superadmin', 'admin')`);
+  if (!admins.some((user) => user.username === 'superadmin' && user.role === 'super_admin')) {
+    throw new Error('Super Admin is not provisioned. Configure TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD for first run.');
+  }
+  for (const user of admins) {
+    // 'admin123' is referenced solely to identify and revoke legacy seeded credentials.
+    if (!verifyPassword('admin123', user.password_hash)) continue;
+    const replacement = user.username === 'superadmin'
+      ? bootstrapSuperAdminPassword : bootstrapCompanyAdminPassword;
+    if (!replacement) {
+      throw new Error(`Unsafe legacy credentials detected for ${user.username}; configure the corresponding TEMO_BOOTSTRAP_*_PASSWORD before starting.`);
+    }
+    if (process.env.NODE_ENV === 'test' && replacement === 'admin123') continue;
+    await update('UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?',
+      [hashPassword(replacement), user.role === 'super_admin' ? 0 : 1, user.id]);
+    await update('DELETE FROM sessions WHERE user_id = ?', [user.id]);
+  }
+}
+
 function createSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');
   return insert('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+7 days"))', [token, userId])
@@ -1923,8 +1962,12 @@ function initializeDatabase() {
       WHERE NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.company_id = p.company_id AND sm.reference = 'PURCHASE-' || p.id AND sm.product_id = pi.product_id)
     `);
 
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
+    if (bootstrapSuperAdminPassword) {
+      db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword(bootstrapSuperAdminPassword)]);
+    }
+    if (bootstrapCompanyAdminPassword) {
+      db.run(`INSERT INTO users (company_id, username, password_hash, name, role, must_change_password) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin', 1 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword(bootstrapCompanyAdminPassword)]);
+    }
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
       if (err) return console.error('Seed check failed:', err.message);
@@ -6626,4 +6669,9 @@ function startServer(port) {
   });
 }
 
-startServer(PORT);
+ensureSecureAdminBootstrap()
+  .then(() => startServer(PORT))
+  .catch((error) => {
+    console.error('Startup security check failed:', error.message);
+    db.close(() => process.exit(1));
+  });
