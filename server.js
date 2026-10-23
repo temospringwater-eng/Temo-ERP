@@ -15,6 +15,7 @@ const { createService: createWhatsAppAssistantService } = require('./services/wh
 const { createService: createFranchiseService } = require('./services/franchise-service');
 const { createService: createSupplierProcurementService } = require('./services/supplier-procurement-service');
 const { createNotificationDeliveryService } = require('./services/notification-delivery-service');
+const { createDriverPasswordResetService } = require('./services/driver-password-reset-service');
 const { getSubscriptionStatus, accessError } = require('./services/subscription-service');
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
@@ -238,6 +239,10 @@ aiAutomationService.initialize();
 const whatsappAssistantService = createWhatsAppAssistantService({ db, query, insert, update, writeAudit });
 whatsappAssistantService.initialize();
 const notificationDeliveryService = createNotificationDeliveryService({ query, insert, update });
+const driverPasswordResetService = createDriverPasswordResetService({
+  query, insert, update, hashPassword,
+  sendEmail: (opts) => notificationDeliveryService.sendEmail(opts)
+});
 const platformOperationsService = createPlatformOperationsService({ db, query, insert, update, writeAudit: (...args) => writeAudit(...args), rootDir: __dirname });
 platformOperationsService.initialize().catch((error) => console.error('Platform operations initialization failed:', error.message));
 const franchiseService = createFranchiseService({ db, query, insert, update, writeAudit });
@@ -511,6 +516,19 @@ function initializeDatabase() {
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
         expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS driver_password_reset_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
         used_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -2223,7 +2241,7 @@ async function writeAudit(req, action, entityType, entityId, previousValue = nul
 }
 
 app.use('/api', (req, res, next) => {
-  if (['/login', '/signup', '/forgot-password', '/reset-password', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path)) return next();
+  if (['/login', '/signup', '/forgot-password', '/reset-password', '/driver/password-reset/request', '/driver/password-reset/confirm', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path)) return next();
   if (req.path.startsWith('/subscription') || ['/me', '/me/password', '/logout'].includes(req.path) || req.path.startsWith('/admin/')) return requireAuth(req, res, next);
   return requireAuth(req, res, (error) => {
     if (error) return next(error);
@@ -2352,7 +2370,7 @@ function exportDateClause(column, from, to) {
 }
 
 app.use('/api', (req, res, next) => {
-  if (['/login', '/signup', '/forgot-password', '/reset-password', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path) || req.path.startsWith('/whatsapp/webhook/')) return next();
+  if (['/login', '/signup', '/forgot-password', '/reset-password', '/driver/password-reset/request', '/driver/password-reset/confirm', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path) || req.path.startsWith('/whatsapp/webhook/')) return next();
   return requireAuth(req, res, next);
 });
 
@@ -2709,16 +2727,50 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
+// Anonymous driver self-service reset. One-time code is emailed to the address
+// registered by the Company Admin; no code/token is exposed by the API.
+app.post('/api/driver/password-reset/request', async (req, res) => {
+  try {
+    res.json(await driverPasswordResetService.request(req.body?.username));
+  } catch (error) {
+    res.status(503).json({ success: false, message: 'Recovery unavailable. Contact your company Admin.' });
+  }
+});
+
+app.post('/api/driver/password-reset/confirm', async (req, res) => {
+  try {
+    const result = await driverPasswordResetService.confirm(
+      req.body?.username, req.body?.code, req.body?.password
+    );
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    res.status(503).json({ success: false, message: 'Recovery unavailable. Contact your company Admin.' });
+  }
+});
+
 app.post('/api/forgot-password', async (req, res) => {
+  const generic = { success: true, message: 'If the account exists and can receive email, recovery instructions will be sent.' };
   try {
     const identifier = String(req.body?.identifier || '').trim().toLowerCase();
-    const users = await query('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ? LIMIT 1', [identifier, identifier]);
-    if (!users[0]) return res.json({ success: true, message: 'If the account exists, reset instructions have been created.' });
+    if (!identifier) return res.json(generic);
+    const users = await query('SELECT id, email FROM users WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND active = 1 LIMIT 1', [identifier, identifier]);
+    const user = users[0];
+    if (!user || !user.email) return res.json(generic);
+    // Limit repeated reset emails per account; always return a generic response.
+    const counts = await query(`SELECT COUNT(*) AS n FROM password_reset_tokens
+      WHERE user_id = ? AND created_at >= datetime('now','-1 hour')`, [user.id]);
+    if (Number(counts[0]?.n || 0) >= 3) return res.json(generic);
     const token = crypto.randomBytes(32).toString('hex');
-    await insert('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+30 minutes"))', [token, users[0].id]);
-    res.json({ success: true, message: 'Reset token created. Use it to set a new password.', resetToken: token });
+    const inserted = await insert('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+30 minutes"))', [token, user.id]);
+    const mail = await notificationDeliveryService.sendEmail({
+      recipient: user.email, type: 'password_reset', variables: {},
+      subject: 'TEMO ERP password recovery',
+      message: `Your TEMO ERP password reset token is: ${token}\n\nThis token expires in 30 minutes. Enter it only in the official TEMO ERP reset-password form. Never share it.`
+    });
+    if (mail.status !== 'sent') await update('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = ?', [token]);
+    return res.json(generic);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(503).json({ success: false, message: 'Recovery service unavailable. Contact your company Admin.' });
   }
 });
 
