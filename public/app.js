@@ -362,6 +362,8 @@ function resetFranchiseState() {
 function showMainApp() {
   resetFranchiseState();
   document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('signupOverlay').classList.add('hidden');
+  document.getElementById('resetOverlay').classList.add('hidden');
   document.getElementById('appShell').classList.remove('hidden');
   window.refreshNotificationCenter?.();
 }
@@ -3798,7 +3800,7 @@ async function initializeApp() {
   setActiveTab('dashboard');
   await fetchCompanies();
   await fetchFranchiseAccess();
-  await fetchAuditLogs(1);
+  if (hasFeature('audit_logs')) await fetchAuditLogs(1);
   await fetchProducts();
   await fetchProduction();
   await fetchDocuments();
