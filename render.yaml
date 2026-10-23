@@ -16,6 +16,8 @@ services:
         value: production
       - key: DB_PATH
         value: /tmp/temo-driver-qa-only.sqlite
+      - key: TEMO_REQUIRE_STAGING_GATE
+        value: "true"
       - key: TEMO_STAGING_GATE_SECRET
         sync: false
       - key: TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD
