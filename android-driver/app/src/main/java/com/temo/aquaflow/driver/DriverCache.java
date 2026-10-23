@@ -73,7 +73,12 @@ final class DriverCache {
             }
             keep.put(operation);
         }
-        prefs.edit().putString("pending", keep.toString()).commit();
+        // Confirm durable queue removal before telling the driver that any
+        // operations have synced. A failed local write must not masquerade as
+        // a completed sync or erase unresolved conflicts.
+        if (!prefs.edit().putString("pending", keep.toString()).commit()) {
+            throw new IllegalStateException("Synced updates could not be confirmed on this device.");
+        }
         return done;
     }
     synchronized void clear() { prefs.edit().clear().apply(); }
