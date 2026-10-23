@@ -4,6 +4,20 @@ This project is **a native Android application**, **not** the TEMO ERP website, 
 
 The app has Android-native Login, My Deliveries, Delivery Detail, Start, Complete, Failed Delivery, customer call/map, finger signature, optional photo, cash, bottle counts, and app-private pending operations. Driver network calls go only to the driver-scoped JSON API on the central ERP. It refuses `super_admin`, `company_admin`, and every non-driver role, even when the username/password are valid. The ERP admin continues using the separately authorized website.
 
+## Free Windows laptop build (no GitHub Actions minutes)
+
+On a Windows laptop, install [Android Studio](https://developer.android.com/studio). Use SDK Manager to install **Android SDK Platform 35**, **Build-Tools 35.0.0**, and **Android SDK Command-line Tools**. Keep JDK 17+ available (the Android Studio bundled JBR is supported).
+
+1. Download the **entire** `recovery/complete-source-2026-10-23` branch of the private `temospringwater-eng/Temo-ERP` repo as a ZIP and extract it, or use Git to check out the branch.
+2. Open PowerShell in the extracted repository root. Run:
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-driver-qa-windows.ps1
+   ```
+3. The script checks the Android SDK, downloads **official Gradle 8.9** with a pinned SHA-256 check, builds the Android debug APK, and writes **`driver-qa-output/TEMO-Driver-Native-QA.apk`** plus its checksum.
+4. Transfer the APK to an authorized test Android phone, install, and confirm native Driver-only login. Do not distribute or enter real cash/customer records before end-to-end QA.
+
+This free alternative uses the laptop's internet to download dependencies and requires enough free disk space for the SDK and Gradle. It **does not** use GitHub-hosted Actions minutes, modify account billing, or deploy the live ERP. It is an *unverified local build path* until executed on a Windows machine.
+
 ## Testing workflow
 - Android workflow: `.github/workflows/android-driver-build.yml`
 - Native APK output: `TEMO-Driver-Native-QA.apk` (debug-signed, separate package)
