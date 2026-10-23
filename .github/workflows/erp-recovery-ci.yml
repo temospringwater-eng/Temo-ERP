@@ -39,3 +39,6 @@ jobs:
 
       - name: Verify non-destructive SQLite restore drill
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Private staging health validation
+        run: node scripts/private-https-staging-qa.js
