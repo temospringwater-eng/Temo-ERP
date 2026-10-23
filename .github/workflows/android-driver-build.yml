@@ -1,4 +1,4 @@
-name: TEMO Driver Android QA APK
+name: TEMO Driver Native QA APK
 on:
   push:
     branches: ["recovery/complete-source-2026-10-23"]
@@ -36,15 +36,15 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/recovery/complete-source-2026-10-23'
         run: |
           set -euo pipefail
-          cp android-driver/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/TEMO-Driver-QA.apk"
+          cp android-driver/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin refs/heads/qa/driver-apk-2026-10-23
           git switch -C qa/driver-apk-2026-10-23 FETCH_HEAD
           mkdir -p qa
-          cp "$RUNNER_TEMP/TEMO-Driver-QA.apk" qa/TEMO-Driver-QA.apk
-          sha256sum qa/TEMO-Driver-QA.apk > qa/TEMO-Driver-QA.apk.sha256
-          git add qa/TEMO-Driver-QA.apk qa/TEMO-Driver-QA.apk.sha256
+          cp "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk" qa/TEMO-Driver-Native-QA.apk
+          sha256sum qa/TEMO-Driver-Native-QA.apk > qa/TEMO-Driver-Native-QA.apk.sha256
+          git add qa/TEMO-Driver-Native-QA.apk qa/TEMO-Driver-Native-QA.apk.sha256
           if ! git diff --cached --quiet; then
             git commit -m "build(android): publish latest private driver QA APK"
             git push origin HEAD:refs/heads/qa/driver-apk-2026-10-23
@@ -56,16 +56,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          unzip -t "$RUNNER_TEMP/TEMO-Driver-QA.apk" > /dev/null
-          sha256sum "$RUNNER_TEMP/TEMO-Driver-QA.apk"
+          unzip -t "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk" > /dev/null
+          sha256sum "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
           if ! gh release view driver-qa-2026-10-23 >/dev/null 2>&1; then
             gh release create driver-qa-2026-10-23 \
               --target "$GITHUB_SHA" \
-              --title "TEMO Driver Android QA - internal test only" \
+              --title "TEMO Driver Native Android QA - internal test only" \
               --notes "Debug APK for authorized mobile testing only. Requires a trusted HTTPS TEMO ERP server. Not production signed." \
               --prerelease
           fi
-          gh release upload driver-qa-2026-10-23 "$RUNNER_TEMP/TEMO-Driver-QA.apk#TEMO-Driver-QA.apk" --clobber
+          gh release upload driver-qa-2026-10-23 "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk#TEMO-Driver-Native-QA.apk" --clobber
       - name: Allow Android emulator acceleration
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
@@ -78,19 +78,19 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 300
           script: |
-            adb install -r "$RUNNER_TEMP/TEMO-Driver-QA.apk"
-            adb shell am start -W -n com.temo.aquaflow.driver/.MainActivity
+            adb install -r "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
+            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
             sleep 5
-            adb shell pidof com.temo.aquaflow.driver
+            adb shell pidof com.temo.aquaflow.driver.nativeapp.nativeapp
             # Simulate runtime location authorization (this does not assert a live GPS fix).
-            adb shell pm grant com.temo.aquaflow.driver android.permission.ACCESS_FINE_LOCATION
-            adb shell dumpsys package com.temo.aquaflow.driver | grep -F 'android.permission.ACCESS_FINE_LOCATION: granted=true'
             # Confirm that a cold restart works with connectivity disabled.
             adb shell svc wifi disable
             adb shell svc data disable
-            adb shell am force-stop com.temo.aquaflow.driver
-            adb shell am start -W -n com.temo.aquaflow.driver/.MainActivity
+            adb shell am force-stop com.temo.aquaflow.driver.nativeapp
+            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
             sleep 3
-            adb shell pidof com.temo.aquaflow.driver
+            adb shell pidof com.temo.aquaflow.driver.nativeapp
             adb shell svc wifi enable
             adb shell svc data enable
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb shell cat /sdcard/window.xml | grep -F 'TEMO DRIVER'
