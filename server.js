@@ -5001,6 +5001,40 @@ app.get('/api/customer/deliveries/:id/proof', requireCustomer, async (req, res) 
   res.json(proof);
 });
 
+// Native driver uploads the actual bytes before a completion records proof metadata.
+// File paths are server-managed, outside public assets. Never trust a caller-supplied key.
+app.post('/api/driver/deliveries/:id/proof-upload', requireRole(...mobileDriverRoles), async (req, res) => {
+  try {
+    const deliveryId = Number(req.params.id);
+    const rows = await query('SELECT id, status FROM deliveries WHERE id = ? AND company_id = ? AND driver_id = ?', [deliveryId, req.companyId, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Assigned delivery not found.' });
+    if (['delivered', 'failed', 'partially_delivered'].includes(rows[0].status)) return res.status(409).json({ message: 'Delivery is closed.' });
+    const kind = String(req.body?.kind || '');
+    if (!['signature', 'photo'].includes(kind)) return res.status(400).json({ message: 'Proof must be signature or photo.' });
+    const value = String(req.body?.imageBase64 || '');
+    if (value.length < 8 || value.length > 3 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+      return res.status(400).json({ message: 'Invalid proof image encoding or size.' });
+    }
+    const bytes = Buffer.from(value, 'base64');
+    if (!bytes.length || bytes.length > 2 * 1024 * 1024) return res.status(400).json({ message: 'Proof image must be under 2MB.' });
+    const isPng = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+    const isJpeg = bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
+    if (!isPng && !isJpeg) return res.status(400).json({ message: 'Only real PNG/JPEG proof images are accepted.' });
+    const root = process.env.TEMO_PROOF_STORAGE_DIR || path.join(__dirname, 'private-proofs');
+    const storageKey = [String(req.companyId), String(deliveryId), crypto.randomBytes(16).toString('hex') + (isPng ? '.png' : '.jpg')].join('/');
+    const fullPath = path.join(root, storageKey);
+    await fs.promises.mkdir(path.dirname(fullPath), { recursive: true, mode: 0o700 });
+    await fs.promises.writeFile(fullPath, bytes, { flag: 'wx', mode: 0o600 });
+    const metadata = {
+      storageKey, contentType: isPng ? 'image/png' : 'image/jpeg',
+      byteSize: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex')
+    };
+    res.status(201).json({ success: true, proof: metadata });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to store proof. Try again when connected.' });
+  }
+});
+
 app.post('/api/driver/deliveries/:id/action', requireRole(...mobileDriverRoles), async (req, res) => {
   try {
     const deliveryId = Number(req.params.id);
