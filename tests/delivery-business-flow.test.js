@@ -121,7 +121,7 @@ test('tenant-isolated order → assigned driver → OTP delivery → payment/bot
     email: `e2e_customer_${process.pid}@example.test`, password: portalPassword
   }, 201);
   const customerLogin = await expect('/api/customer/login', null, 'POST', {
-    identifier: `e2e_customer_${process.pid}@example.test`, password: portalPassword
+    email: `e2e_customer_${process.pid}@example.test`, password: portalPassword
   }, 200);
   const otp = await expect(`/api/customer/deliveries/${linked.id}/otp`, customerLogin.token, 'POST', {}, 201);
   assert.match(otp.otpCode, /^\d{6}$/);
