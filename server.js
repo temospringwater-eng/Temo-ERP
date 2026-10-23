@@ -37,6 +37,9 @@ const documentStorage = new DocumentStorageAdapter();
 const SUPPORTED_LANGUAGES = ['en', 'ur', 'ar'];
 
 app.use(express.json({ limit: '12mb' }));
+if (process.env.TEMO_REQUIRE_STAGING_GATE === 'true' && !process.env.TEMO_STAGING_GATE_SECRET) {
+  throw new Error('Private staging is locked: configure TEMO_STAGING_GATE_SECRET before starting.');
+}
 if (process.env.TEMO_STAGING_GATE_SECRET) {
   if (process.env.NODE_ENV !== 'production') throw new Error('Staging access gate requires NODE_ENV=production');
   app.set('trust proxy', 1);
