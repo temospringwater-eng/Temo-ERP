@@ -4961,6 +4961,13 @@ async function verifyDeliveryOtp(req, delivery, challengeId, code) {
   return true;
 }
 
+app.get('/api/driver/bottle-types', requireRole(...mobileDriverRoles), async (req, res) => {
+  try {
+    const bottles = await query('SELECT id, name FROM bottles WHERE company_id = ? AND active = 1 ORDER BY name, id', [req.companyId]);
+    res.json(bottles);
+  } catch (_) { res.status(500).json({ message: 'Could not fetch bottle types.' }); }
+});
+
 app.get('/api/driver/deliveries', requireRole(...mobileDriverRoles), async (req, res) => {
   try {
     const requestedDate = req.query.date || new Date().toISOString().slice(0, 10);
