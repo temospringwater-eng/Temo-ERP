@@ -13,10 +13,16 @@ On a Windows laptop, install [Android Studio](https://developer.android.com/stud
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-driver-qa-windows.ps1
    ```
-3. The script checks the Android SDK, downloads **official Gradle 8.9** with a pinned SHA-256 check, builds the Android debug APK, and writes **`driver-qa-output/TEMO-Driver-Native-QA.apk`** plus its checksum.
+3. The script checks the Android SDK, downloads **official Gradle 8.9** with a pinned SHA-256 check, builds the Android debug APK, verifies native package identity / app label / Android debug signature (and rejects tiny wrapper artifacts), then writes **`driver-qa-output/TEMO-Driver-Native-QA.apk`** plus its checksum.
 4. Transfer the APK to an authorized test Android phone, install, and confirm native Driver-only login. Do not distribute or enter real cash/customer records before end-to-end QA.
 
 This free alternative uses the laptop's internet to download dependencies and requires enough free disk space for the SDK and Gradle. It **does not** use GitHub-hosted Actions minutes, modify account billing, or deploy the live ERP. It is an *unverified local build path* until executed on a Windows machine.
+
+## Manual GitHub QA workflow (when Actions minutes are available)
+
+The GitHub workflow **TEMO Driver Native QA APK** is manual-only (`workflow_dispatch`) to preserve the private account's limited Actions minutes. It builds the APK and performs a disposable Android 35 emulator launch plus offline cold restart using `android-driver/scripts/qa-emulator-smoke.sh` **before** it uploads or publishes any QA APK. A smoke-test failure must block publication.
+
+These smoke tests **do not** validate driver login against a real HTTPS server, assigned deliveries, OTP delivery, cash/bottle ledger, or offline authenticated re-login. Do not call the APK production-ready without separate end-to-end QA.
 
 ## Testing workflow
 - Android workflow: `.github/workflows/android-driver-build.yml`
