@@ -13,6 +13,7 @@ The app has Android-native Login, My Deliveries, Delivery Detail, Start, Complet
 - "Complete" requires a real customer 6-digit OTP and signature, as the ERP backend demands.
 - Proof photos/signatures are uploaded over authenticated HTTPS to the ERP's server-private `TEMO_PROOF_STORAGE_DIR` location. Production needs a durable private volume and a retention policy.
 - When offline, assigned deliveries last fetched can be viewed, and `start` / `fail` operations are stored locally with idempotency keys. While the app process is running, reconnection automatically retries pending updates; manual Sync remains available. Conflicted/failed operations are retained for review. Do not assume offline completion is possible without the server-issued OTP and uploaded proof.
+- **Review Saved Updates** displays pending, rejected and conflicting driver actions with readable details. A local update is only acknowledged after the device confirms a durable save; failed/conflicted operations remain visible for manager review.
 
 ## Limitations that must be resolved before Go-Live
 - Android background-service sync and push notifications are **not implemented**. Auto-sync is limited to network reconnection while the app process is active, or returning to the running app; manual sync remains available.
