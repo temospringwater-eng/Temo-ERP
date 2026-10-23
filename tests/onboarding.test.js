@@ -105,26 +105,7 @@ test('custom onboarding persists selected feature overrides and rolls back dupli
     })
   });
 
-  test('enterprise onboarding assigns Enterprise subscription', async () => {
-    const superAdmin = await login('superadmin', 'admin123');
-    const created = await request('/api/admin/companies', {
-      method: 'POST',
-      headers: { ...superAdmin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        companyName: 'Onboard Enterprise Ltd',
-        companyCode: `EN${process.pid}`,
-        plan: 'enterprise',
-        status: 'active',
-        startDate: '2026-09-23',
-        expiryDate: '2027-09-23',
-        adminName: 'Enterprise Admin',
-        adminUsername: `enterprise${process.pid}`,
-        adminPassword: 'Temporary123!'
-      })
-    });
-    assert.equal(created.status, 201, created.body);
-    assert.equal(created.json.subscription.plan_slug, 'enterprise');
-  });
+
   assert.equal(created.status, 201, created.body);
   const featureResponse = await request(`/api/admin/companies/${created.json.company.id}/features`, { headers: superAdmin });
   assert.equal(featureResponse.status, 200, featureResponse.body);
@@ -140,4 +121,25 @@ test('custom onboarding persists selected feature overrides and rolls back dupli
   const companies = await request('/api/admin/companies?search=RB', { headers: superAdmin });
   assert.equal(companies.status, 200);
   assert.equal(companies.json.length, 0);
+});
+
+test('enterprise onboarding assigns Enterprise subscription', async () => {
+  const superAdmin = await login('superadmin', 'admin123');
+  const created = await request('/api/admin/companies', {
+    method: 'POST',
+    headers: { ...superAdmin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      companyName: 'Onboard Enterprise Ltd',
+      companyCode: `EN${process.pid}`,
+      plan: 'enterprise',
+      status: 'active',
+      startDate: '2026-09-23',
+      expiryDate: '2027-09-23',
+      adminName: 'Enterprise Admin',
+      adminUsername: `enterprise${process.pid}`,
+      adminPassword: 'Temporary123!'
+    })
+  });
+  assert.equal(created.status, 201, created.body);
+  assert.equal(created.json.subscription.plan_slug, 'enterprise');
 });
