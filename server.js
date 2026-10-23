@@ -3458,8 +3458,8 @@ app.post('/api/companies/:id/users', async (req, res) => {
     }
     const { username, email, password, name, role = 'staff' } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (!username || !password || !name || !allowedRoles.includes(role)) {
       return res.status(400).json({ message: 'Name, username, password and a valid role are required.' });
     }
@@ -3495,8 +3495,8 @@ app.patch('/api/users/:id', async (req, res) => {
     }
     const { name, email, phone, role, active, status, password, mustChangePassword } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (role && !allowedRoles.includes(role)) return res.status(400).json({ message: 'Invalid user role.' });
     if (status && !['active', 'inactive', 'suspended', 'archived'].includes(String(status).toLowerCase())) return res.status(400).json({ message: 'Invalid user status.' });
     const existing = (await query('SELECT * FROM users WHERE id = ?', [userId]))[0];
