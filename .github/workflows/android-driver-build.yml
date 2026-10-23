@@ -32,19 +32,6 @@ jobs:
         run: |
           test -s android-driver/app/build/outputs/apk/debug/app-debug.apk
           sha256sum android-driver/app/build/outputs/apk/debug/app-debug.apk
-      - name: Install and launch APK on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          disable-animations: true
-          emulator-boot-timeout: 600
-          script: |
-            adb install -r android-driver/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -W -n com.temo.aquaflow.driver/.MainActivity
-            sleep 5
-            adb shell pidof com.temo.aquaflow.driver
       - name: Publish QA APK to private QA branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'recovery/complete-source-2026-10-23'
         run: |
@@ -62,3 +49,20 @@ jobs:
             git commit -m "build(android): publish latest private driver QA APK"
             git push origin HEAD:refs/heads/qa/driver-apk-2026-10-23
           fi
+
+      - name: Allow Android emulator acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Install and launch APK on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-boot-timeout: 300
+          script: |
+            adb install -r "$RUNNER_TEMP/TEMO-Driver-QA.apk"
+            adb shell am start -W -n com.temo.aquaflow.driver/.MainActivity
+            sleep 5
+            adb shell pidof com.temo.aquaflow.driver
