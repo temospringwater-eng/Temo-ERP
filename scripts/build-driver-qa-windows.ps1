@@ -76,6 +76,29 @@ Write-Host 'Compiling TEMO Driver Native Android QA APK...'
 if ($LASTEXITCODE -ne 0) { throw 'Gradle compile failed; see the error printed above.' }
 if (-not (Test-Path $buildResult)) { throw 'APK missing after build.' }
 
+# Reject a tiny wrapper or malformed package even if Gradle returned success.
+$apkBytes = (Get-Item $buildResult).Length
+if ($apkBytes -lt 100000) {
+    throw 'APK is unexpectedly small. Refusing to distribute a possible invalid or legacy wrapper package.'
+}
+$aapt = Join-Path $sdk 'build-tools\35.0.0\aapt2.exe'
+$apksigner = Join-Path $sdk 'build-tools\35.0.0\apksigner.bat'
+if (-not (Test-Path $aapt) -or -not (Test-Path $apksigner)) {
+    throw 'Android APK verification tools missing from SDK Build-Tools 35.0.0.'
+}
+$badging = (& $aapt dump badging $buildResult | Out-String)
+if ($LASTEXITCODE -ne 0 -or $badging -notmatch "package: name='com[.]temo[.]aquaflow[.]driver[.]nativeapp'") {
+    throw 'APK has the wrong Android application ID or an unreadable Android manifest.'
+}
+if ($badging -notmatch "application-label:'TEMO Driver Native'") {
+    throw 'APK is missing the native TEMO Driver application label.'
+}
+& $apksigner verify --verbose $buildResult
+if ($LASTEXITCODE -ne 0) {
+    throw 'Android APK signature verification failed.'
+}
+Write-Host 'PASS: Android manifest, package ID, app label, and APK signature verified.'
+
 $outputDir = Join-Path $repoRoot 'driver-qa-output'
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $outputApk = Join-Path $outputDir 'TEMO-Driver-Native-QA.apk'
