@@ -38,26 +38,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-boot-timeout: 300
-          script: |
-            set -euo pipefail
-            adb install -r "$RUNNER_TEMP/TEMO-Driver-Native-QA.apk"
-            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
-            sleep 5
-            adb shell pidof com.temo.aquaflow.driver.nativeapp
-            # Simulate runtime location authorization (this does not assert a live GPS fix).
-            # Confirm that a cold restart works with connectivity disabled.
-            adb shell svc wifi disable
-            adb shell svc data disable
-            adb shell am force-stop com.temo.aquaflow.driver.nativeapp
-            adb shell am start -W -n com.temo.aquaflow.driver.nativeapp/com.temo.aquaflow.driver.MainActivity
-            sleep 3
-            adb shell pidof com.temo.aquaflow.driver.nativeapp
-            adb shell svc wifi enable
-            adb shell svc data enable
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb shell cat /sdcard/window.xml | grep -F 'TEMO DRIVER'
-            adb shell cat /sdcard/window.xml | grep -F 'Driver Login'
-
+          script: bash android-driver/scripts/qa-emulator-smoke.sh
       - name: Upload native QA APK as private workflow artifact
         uses: actions/upload-artifact@v4
         with:
