@@ -25,3 +25,15 @@ No customer names, record IDs or secret values are included in this report.
 5. Confirm off-site backup and recovery on the actual staging deployment before Go-Live.
 
 A successful SQLite restore of corrupted relational data is **not** proof of referential integrity. Keep release blocked until reviewed.
+
+## Safe repair performed on the user-supplied database COPY
+
+Using a separate, isolated QA database file (not the original uploaded file or production database):
+- All **10** known FK violations were reconciled; subsequent `PRAGMA foreign_key_check` returned **0**.
+- All **617 existing audit-log rows** were retained. Four missing user/company references were set NULL while their original missing-parent IDs were retained in `integrity_reconciliation`.
+- Three orphan company-currency settings rows were moved to the reconciliation archive with their original values; they were removed only from the active table in the QA copy.
+- Two orphan sessions and one orphan password-reset token were revoked in the QA copy; only token SHA-256 digests, not raw bearer tokens, were retained for the reconciliation record.
+- Original uploaded SQLite bytes were unchanged, and repaired copy passed `PRAGMA integrity_check`.
+- The protected script is `scripts/reconcile-fk-qa.py`, covered by `tests/test_fk_reconciliation.py` in GitHub CI.
+
+**Important:** This clears the FK red cross on the **repaired QA COPY only**. A live production DB was neither accessed nor changed, and it must not be overwritten automatically. Owner-approved production data reconciliation and the retention policy for audit references are still a Go-Live gate.
