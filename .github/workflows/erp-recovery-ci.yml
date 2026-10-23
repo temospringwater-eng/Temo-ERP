@@ -36,3 +36,6 @@ jobs:
           TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: admin123
           TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: admin123
         run: npm test
+
+      - name: Verify non-destructive SQLite restore drill
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
