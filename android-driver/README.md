@@ -1,26 +1,24 @@
-# TEMO Driver Android QA build
+# TEMO Driver Native Android App — QA source
 
-This is a minimal **Android WebView wrapper** around the existing TEMO AQUAFLOW ERP driver interface. It is an early QA APK, **not** a fully native driver app.
+This project is **a native Android application**, **not** the TEMO ERP website, a WebView, or an ERP admin panel. The separate package is `com.temo.aquaflow.driver.nativeapp` and label is **TEMO Driver Native**.
 
-## Build
-The recovery-branch workflow `.github/workflows/android-driver-build.yml` compiles an **Android debug APK** using Java 17, Gradle 8.9 and Android SDK 35. A successful run publishes the debug APK and checksum to the **separate private** `qa/driver-apk-2026-10-23` branch at `qa/TEMO-Driver-QA.apk`, without using full GitHub Actions artifact storage. The recovery PR and `main` remain source-only. The Android job is triggered by Android source/workflow changes rather than unrelated backend-only changes. An Android APK is *not* a signed production release.
+The app has Android-native Login, My Deliveries, Delivery Detail, Start, Complete, Failed Delivery, customer call/map, finger signature, optional photo, cash, bottle counts, and app-private pending operations. Driver network calls go only to the driver-scoped JSON API on the central ERP. It refuses `super_admin`, `company_admin`, and every non-driver role, even when the username/password are valid. The ERP admin continues using the separately authorized website.
 
-## First launch
-Enter a private **HTTPS** ERP server origin (for example `https://erp.example.com`) and sign in using a user with a `driver` role. The URL is device-local; it is not hard-coded or bundled with credentials. Public unencrypted HTTP is blocked. The server must already be online and have a trusted TLS certificate.
+## Testing workflow
+- Android workflow: `.github/workflows/android-driver-build.yml`
+- Native APK output: `TEMO-Driver-Native-QA.apk` (debug-signed, separate package)
+- Driver must already have an assigned delivery created by company admin in the **ERP Admin**.
+- Enter a trusted HTTPS server origin and optional temporary QA access code, then driver username/password.
+- A temporary test gate is unlocked through native HTTPS requests; no Cloudflare login page is displayed.
+- "Complete" requires a real customer 6-digit OTP and signature, as the ERP backend demands.
+- Proof photos/signatures are uploaded over authenticated HTTPS to the ERP's server-private `TEMO_PROOF_STORAGE_DIR` location. Production needs a durable private volume and a retention policy.
+- When offline, assigned deliveries last fetched can be viewed, and `start` / `fail` operations are stored locally with idempotency keys; manually sync on reconnection. Do not assume offline completion is possible without the server-issued OTP and uploaded proof.
 
-## Included
-- Existing driver route/status screens from `public/index.html`, controlled server-side by driver permissions
-- WebView DOM storage/cookies for the existing ERP session
-- Android photo picker for proof attachments; GPS prompt requires Android runtime permission
-- External navigation/map links go to available installed apps
-- Offline service-worker and IndexedDB behavior depends on the existing web app and requires real-device testing
+## Limitations that must be resolved before Go-Live
+- Native background sync and push notifications are **not implemented**; sync is manually triggered.
+- A customer OTP delivery channel (customer portal/SMS integration) must be connected and tested; a driver OTP request does not itself send an SMS in the current backend.
+- Driver GPS tracking, custom per-driver admin permissions, offline customer creation, and production-signed release need separate implementation and testing.
+- Native device runtime integration test and full backend API validation **must be green**; do not release purely from source checks.
+- App is for fictitious testing data only, not real cash collection/customer records until backend hosting/HTTPS/backup/role security passes.
 
-## Not yet verified
-- Android APK installation and real-device behavior
-- Native background sync or push notifications (not implemented)
-- Offline GPS, camera capture, signature hardware integration beyond the web UI
-- Hosted HTTPS ERP staging service with valid trial accounts
-- Actual end-to-end delivery on a mobile network
-- Signing and publishing a production APK / Play Store distribution
-
-Do **not** use real customer information for QA until security/staging sign-off. Never disable device security or Android Play Protect to install a failed/unknown build.
+Old WebView wrapper binaries named `TEMO-Driver-QA.apk` are obsolete; do not use them as native-app test evidence.
