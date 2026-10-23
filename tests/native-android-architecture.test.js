@@ -40,6 +40,17 @@ test('pending driver updates retry on reconnect without loading the ERP website'
   assert.match(ui, /Retain pending entries/);
 });
 
+test('driver can review unsynced and rejected operations without clearing their records', () => {
+  const ui = source('app/src/main/java/com/temo/aquaflow/driver/MainActivity.java');
+  const queue = source('app/src/main/java/com/temo/aquaflow/driver/DriverCache.java');
+  assert.match(ui, /Review Saved Updates/);
+  assert.match(ui, /private void offlineStatus\(\)/);
+  assert.match(ui, /Needs review:/);
+  assert.match(ui, /Rejected updates are kept for manager review/);
+  assert.match(queue, /Could not save offline update to this device/);
+  assert.match(queue, /if \(!prefs\.edit\(\)\.putString\("pending", old\.toString\(\)\)\.commit\(\)\)/);
+});
+
 test('native app never requests broad camera storage or insecure HTTP permissions', () => {
   const manifest = source('app/src/main/AndroidManifest.xml');
   assert.match(manifest, /android:usesCleartextTraffic="false"/);
