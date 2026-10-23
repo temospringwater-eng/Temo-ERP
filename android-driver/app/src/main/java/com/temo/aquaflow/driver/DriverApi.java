@@ -66,6 +66,7 @@ final class DriverApi {
                 if (status >= 300 && status < 400) throw new ApiException(status, "Server redirected the request. Please check the server address.");
                 throw new ApiException(status, "Server returned an unexpected response.");
             }
+            if (status == 409 && "/api/driver/offline-sync".equals(route) && result.has("results")) return result;
             if (status < 200 || status >= 300) throw new ApiException(status, result.optString("message", "Request failed (" + status + ")"));
             return result;
         } finally { conn.disconnect(); }
