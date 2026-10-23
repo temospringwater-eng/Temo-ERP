@@ -35,7 +35,9 @@ final class DriverCache {
             .put("_state", "pending");
         JSONArray old = queue();
         old.put(item);
-        prefs.edit().putString("pending", old.toString()).commit();
+        if (!prefs.edit().putString("pending", old.toString()).commit()) {
+            throw new IllegalStateException("Could not save offline update to this device.");
+        }
     }
     synchronized JSONArray sendable() throws Exception {
         JSONArray answer = new JSONArray();
