@@ -202,7 +202,10 @@ public final class MainActivity extends Activity {
     private void home(JSONArray data, boolean fromCache) {
         LinearLayout box = page("MY DELIVERIES", driver.optString("name", "Driver") + "  ·  " + today());
         if (fromCache) line(box, "Offline: showing last saved assignments", 15);
-        if (cache.queuedCount() > 0) line(box, "Saved updates: " + cache.queuedCount() + " (tap Sync)", 16);
+        if (cache.queuedCount() > 0) {
+            line(box, "Updates requiring attention: " + cache.queuedCount(), 16);
+            action(box, "Review Saved Updates", this::offlineStatus);
+        }
         action(box, "Refresh Deliveries", () -> loadDeliveries(history));
         action(box, history ? "Today's Deliveries" : "Delivery History", () -> loadDeliveries(!history));
         action(box, "Sync Offline Updates", this::sync);
@@ -304,6 +307,34 @@ public final class MainActivity extends Activity {
                 if (currentCache == cache && completed > 0) toast(completed + " saved updates synced automatically.");
             });
         });
+    }
+
+    // This screen includes pending and rejected records; a failed/conflicted
+    // operation is not represented as a successful delivery.
+    private void offlineStatus() {
+        if (cache == null || driver == null) { welcome(); return; }
+        JSONArray records = cache.queue();
+        LinearLayout box = page("SAVED UPDATES", "Pending changes are not confirmed in ERP until they sync.");
+        if (records.length() == 0) line(box, "All saved updates have synced.", 18);
+        int pending = 0;
+        int rejected = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject record = records.optJSONObject(i);
+            if (record == null) continue;
+            String state = record.optString("_state", "pending");
+            if ("pending".equals(state)) pending++;
+            else rejected++;
+            LinearLayout item = card(box);
+            String actionName = record.optString("operationType", "update").replace('_', ' ');
+            line(item, actionName + " • Delivery #" + record.optLong("deliveryId"), 18);
+            line(item, "pending".equals(state) ? "Waiting for internet / sync" : "Needs review: " + state, 15);
+            String explanation = record.optString("_message", "");
+            if (!explanation.isEmpty()) line(item, explanation, 14);
+        }
+        line(box, pending + " pending • " + rejected + " need review", 16);
+        if (pending > 0) action(box, "Sync Pending Updates", this::sync);
+        if (rejected > 0) line(box, "Rejected updates are kept for manager review; they cannot be silently marked delivered.", 14);
+        action(box, "Back to Deliveries", () -> loadDeliveries(history));
     }
 
     private void sync() {
