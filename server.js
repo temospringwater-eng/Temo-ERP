@@ -15,6 +15,7 @@ const { createService: createWhatsAppAssistantService } = require('./services/wh
 const { createService: createFranchiseService } = require('./services/franchise-service');
 const { createService: createSupplierProcurementService } = require('./services/supplier-procurement-service');
 const { createNotificationDeliveryService } = require('./services/notification-delivery-service');
+const { createDriverPasswordResetService } = require('./services/driver-password-reset-service');
 const { getSubscriptionStatus, accessError } = require('./services/subscription-service');
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
@@ -37,6 +38,15 @@ const documentStorage = new DocumentStorageAdapter();
 const SUPPORTED_LANGUAGES = ['en', 'ur', 'ar'];
 
 app.use(express.json({ limit: '12mb' }));
+if (process.env.TEMO_REQUIRE_STAGING_GATE === 'true' && !process.env.TEMO_STAGING_GATE_SECRET) {
+  throw new Error('Private staging is locked: configure TEMO_STAGING_GATE_SECRET before starting.');
+}
+if (process.env.TEMO_STAGING_GATE_SECRET) {
+  if (process.env.NODE_ENV !== 'production') throw new Error('Staging access gate requires NODE_ENV=production');
+  app.set('trust proxy', 1);
+  app.use(express.urlencoded({ extended: false, limit: '2kb' }));
+  app.use(require('./services/staging-gate').createStagingGate(process.env.TEMO_STAGING_GATE_SECRET));
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 const runtimeMetrics = { requests: 0, errors: 0, startedAt: Date.now(), durationsMs: 0 };
@@ -54,21 +64,6 @@ app.use((req, res, next) => {
     }
   });
 
-  app.post('/api/me/password', async (req, res) => {
-    try {
-      const currentPassword = String(req.body?.currentPassword || '');
-      const newPassword = String(req.body?.newPassword || '');
-      const confirmPassword = String(req.body?.confirmPassword || '');
-      const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
-      if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
-      if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
-      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
-      await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
-      res.json({ success: true, mustChangePassword: false });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Unable to change password.' });
-    }
-  });
   next();
 });
 
@@ -82,6 +77,45 @@ function verifyPassword(password, storedHash) {
   if (!salt || !expectedHash) return false;
   const actualHash = crypto.scryptSync(password, salt, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(actualHash, 'hex'), Buffer.from(expectedHash, 'hex'));
+}
+
+// Bootstrap credentials must be supplied out-of-band; never seed public default passwords.
+function readBootstrapPassword(name) {
+  const password = String(process.env[name] || '');
+  if (!password) return null;
+  if (process.env.NODE_ENV !== 'test' && (password.length < 16 || password === 'admin123')) {
+    throw new Error(`${name} must contain at least 16 characters and cannot be a known default.`);
+  }
+  return password;
+}
+
+const bootstrapSuperAdminPassword = readBootstrapPassword('TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD');
+const bootstrapCompanyAdminPassword = readBootstrapPassword('TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD');
+if (process.env.NODE_ENV !== 'test' && bootstrapSuperAdminPassword && bootstrapSuperAdminPassword === bootstrapCompanyAdminPassword) {
+  throw new Error('Bootstrap super admin and company admin passwords must be different.');
+}
+
+// Migrate known credentials only when an explicit secure replacement is provided.
+// Without one, refuse to expose an existing weak admin account over HTTP.
+async function ensureSecureAdminBootstrap() {
+  const admins = await query(`SELECT id, username, role, password_hash FROM users
+    WHERE username IN ('superadmin', 'admin')`);
+  if (!admins.some((user) => user.username === 'superadmin' && user.role === 'super_admin')) {
+    throw new Error('Super Admin is not provisioned. Configure TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD for first run.');
+  }
+  for (const user of admins) {
+    // 'admin123' is referenced solely to identify and revoke legacy seeded credentials.
+    if (!verifyPassword('admin123', user.password_hash)) continue;
+    const replacement = user.username === 'superadmin'
+      ? bootstrapSuperAdminPassword : bootstrapCompanyAdminPassword;
+    if (!replacement) {
+      throw new Error(`Unsafe legacy credentials detected for ${user.username}; configure the corresponding TEMO_BOOTSTRAP_*_PASSWORD before starting.`);
+    }
+    if (process.env.NODE_ENV === 'test' && replacement === 'admin123') continue;
+    await update('UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?',
+      [hashPassword(replacement), user.role === 'super_admin' ? 0 : 1, user.id]);
+    await update('DELETE FROM sessions WHERE user_id = ?', [user.id]);
+  }
 }
 
 function createSession(userId) {
@@ -205,6 +239,10 @@ aiAutomationService.initialize();
 const whatsappAssistantService = createWhatsAppAssistantService({ db, query, insert, update, writeAudit });
 whatsappAssistantService.initialize();
 const notificationDeliveryService = createNotificationDeliveryService({ query, insert, update });
+const driverPasswordResetService = createDriverPasswordResetService({
+  query, insert, update, hashPassword,
+  sendEmail: (opts) => notificationDeliveryService.sendEmail(opts)
+});
 const platformOperationsService = createPlatformOperationsService({ db, query, insert, update, writeAudit: (...args) => writeAudit(...args), rootDir: __dirname });
 platformOperationsService.initialize().catch((error) => console.error('Platform operations initialization failed:', error.message));
 const franchiseService = createFranchiseService({ db, query, insert, update, writeAudit });
@@ -478,6 +516,19 @@ function initializeDatabase() {
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
         expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS driver_password_reset_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
         used_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -1923,8 +1974,12 @@ function initializeDatabase() {
       WHERE NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.company_id = p.company_id AND sm.reference = 'PURCHASE-' || p.id AND sm.product_id = pi.product_id)
     `);
 
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
+    if (bootstrapSuperAdminPassword) {
+      db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword(bootstrapSuperAdminPassword)]);
+    }
+    if (bootstrapCompanyAdminPassword) {
+      db.run(`INSERT INTO users (company_id, username, password_hash, name, role, must_change_password) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin', ? WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword(bootstrapCompanyAdminPassword), process.env.NODE_ENV === 'test' ? 0 : 1]);
+    }
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
       if (err) return console.error('Seed check failed:', err.message);
@@ -2186,7 +2241,7 @@ async function writeAudit(req, action, entityType, entityId, previousValue = nul
 }
 
 app.use('/api', (req, res, next) => {
-  if (['/login', '/signup', '/forgot-password', '/reset-password', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path)) return next();
+  if (['/login', '/signup', '/forgot-password', '/reset-password', '/driver/password-reset/request', '/driver/password-reset/confirm', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path)) return next();
   if (req.path.startsWith('/subscription') || ['/me', '/me/password', '/logout'].includes(req.path) || req.path.startsWith('/admin/')) return requireAuth(req, res, next);
   return requireAuth(req, res, (error) => {
     if (error) return next(error);
@@ -2315,7 +2370,7 @@ function exportDateClause(column, from, to) {
 }
 
 app.use('/api', (req, res, next) => {
-  if (['/login', '/signup', '/forgot-password', '/reset-password', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path) || req.path.startsWith('/whatsapp/webhook/')) return next();
+  if (['/login', '/signup', '/forgot-password', '/reset-password', '/driver/password-reset/request', '/driver/password-reset/confirm', '/customer/login', '/health', '/readiness', '/metrics'].includes(req.path) || req.path.startsWith('/whatsapp/webhook/')) return next();
   return requireAuth(req, res, next);
 });
 
@@ -2442,7 +2497,7 @@ app.post('/api/customers/:id/portal-access', requireRole(...customerPortalRoles)
     const customerId = Number(req.params.id); const customer = (await query('SELECT * FROM customers WHERE id = ? AND company_id = ?', [customerId, req.companyId]))[0];
     const email = String(req.body?.email || customer?.email || '').trim().toLowerCase(); const password = String(req.body?.password || '');
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
-    if (!/^\\S+@\\S+\\.\\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
     const username = `customer_${customerId}`; const existing = (await query('SELECT id FROM users WHERE (LOWER(email) = ? OR username = ?) AND id != COALESCE(?, -1)', [email, username, null]))[0];
     if (existing) return res.status(409).json({ message: 'That email or customer portal username is already in use.' });
     const linked = (await query('SELECT id FROM users WHERE customer_id = ? AND company_id = ?', [customerId, req.companyId]))[0];
@@ -2672,16 +2727,50 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
+// Anonymous driver self-service reset. One-time code is emailed to the address
+// registered by the Company Admin; no code/token is exposed by the API.
+app.post('/api/driver/password-reset/request', async (req, res) => {
+  try {
+    res.json(await driverPasswordResetService.request(req.body?.username));
+  } catch (error) {
+    res.status(503).json({ success: false, message: 'Recovery unavailable. Contact your company Admin.' });
+  }
+});
+
+app.post('/api/driver/password-reset/confirm', async (req, res) => {
+  try {
+    const result = await driverPasswordResetService.confirm(
+      req.body?.username, req.body?.code, req.body?.password
+    );
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    res.status(503).json({ success: false, message: 'Recovery unavailable. Contact your company Admin.' });
+  }
+});
+
 app.post('/api/forgot-password', async (req, res) => {
+  const generic = { success: true, message: 'If the account exists and can receive email, recovery instructions will be sent.' };
   try {
     const identifier = String(req.body?.identifier || '').trim().toLowerCase();
-    const users = await query('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ? LIMIT 1', [identifier, identifier]);
-    if (!users[0]) return res.json({ success: true, message: 'If the account exists, reset instructions have been created.' });
+    if (!identifier) return res.json(generic);
+    const users = await query('SELECT id, email FROM users WHERE (LOWER(username) = ? OR LOWER(email) = ?) AND active = 1 LIMIT 1', [identifier, identifier]);
+    const user = users[0];
+    if (!user || !user.email) return res.json(generic);
+    // Limit repeated reset emails per account; always return a generic response.
+    const counts = await query(`SELECT COUNT(*) AS n FROM password_reset_tokens
+      WHERE user_id = ? AND created_at >= datetime('now','-1 hour')`, [user.id]);
+    if (Number(counts[0]?.n || 0) >= 3) return res.json(generic);
     const token = crypto.randomBytes(32).toString('hex');
-    await insert('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+30 minutes"))', [token, users[0].id]);
-    res.json({ success: true, message: 'Reset token created. Use it to set a new password.', resetToken: token });
+    const inserted = await insert('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, datetime("now", "+30 minutes"))', [token, user.id]);
+    const mail = await notificationDeliveryService.sendEmail({
+      recipient: user.email, type: 'password_reset', variables: {},
+      subject: 'TEMO ERP password recovery',
+      message: `Your TEMO ERP password reset token is: ${token}\n\nThis token expires in 30 minutes. Enter it only in the official TEMO ERP reset-password form. Never share it.`
+    });
+    if (mail.status !== 'sent') await update('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = ?', [token]);
+    return res.json(generic);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(503).json({ success: false, message: 'Recovery service unavailable. Contact your company Admin.' });
   }
 });
 
@@ -2697,6 +2786,22 @@ app.post('/api/reset-password', async (req, res) => {
     res.json({ success: true, message: 'Password reset successfully.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/me/password', async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+    const user = (await query('SELECT password_hash FROM users WHERE id = ?', [req.user.id]))[0];
+    if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
+    await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', [hashPassword(newPassword), req.user.id]);
+    await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
+    res.json({ success: true, mustChangePassword: false });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Unable to change password.' });
   }
 });
 
@@ -3415,8 +3520,8 @@ app.post('/api/companies/:id/users', async (req, res) => {
     }
     const { username, email, password, name, role = 'staff' } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (!username || !password || !name || !allowedRoles.includes(role)) {
       return res.status(400).json({ message: 'Name, username, password and a valid role are required.' });
     }
@@ -3452,8 +3557,8 @@ app.patch('/api/users/:id', async (req, res) => {
     }
     const { name, email, phone, role, active, status, password, mustChangePassword } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (role && !allowedRoles.includes(role)) return res.status(400).json({ message: 'Invalid user role.' });
     if (status && !['active', 'inactive', 'suspended', 'archived'].includes(String(status).toLowerCase())) return res.status(400).json({ message: 'Invalid user status.' });
     const existing = (await query('SELECT * FROM users WHERE id = ?', [userId]))[0];
@@ -4902,11 +5007,18 @@ async function verifyDeliveryOtp(req, delivery, challengeId, code) {
   const challenge = (await query('SELECT * FROM delivery_otp_challenges WHERE id = ? AND delivery_id = ? AND company_id = ? AND verified_at IS NULL', [Number(challengeId), delivery.id, req.companyId]))[0];
   if (!challenge || new Date(challenge.expires_at).getTime() < Date.now() || challenge.attempts >= 5) return false;
   await update('UPDATE delivery_otp_challenges SET attempts = attempts + 1 WHERE id = ?', [challenge.id]);
-  if (!/^\\d{6}$/.test(String(code || '')) || otpHash(code) !== challenge.code_hash) return false;
+  if (!/^\d{6}$/.test(String(code || '')) || otpHash(code) !== challenge.code_hash) return false;
   await update('UPDATE delivery_otp_challenges SET verified_at = CURRENT_TIMESTAMP WHERE id = ?', [challenge.id]);
   req.verifiedOtp = challenge;
   return true;
 }
+
+app.get('/api/driver/bottle-types', requireRole(...mobileDriverRoles), async (req, res) => {
+  try {
+    const bottles = await query('SELECT id, name FROM bottles WHERE company_id = ? AND active = 1 ORDER BY name, id', [req.companyId]);
+    res.json(bottles);
+  } catch (_) { res.status(500).json({ message: 'Could not fetch bottle types.' }); }
+});
 
 app.get('/api/driver/deliveries', requireRole(...mobileDriverRoles), async (req, res) => {
   try {
@@ -4946,6 +5058,40 @@ app.get('/api/customer/deliveries/:id/proof', requireCustomer, async (req, res) 
   const proof = (await query(`SELECT p.* FROM delivery_proofs p JOIN deliveries d ON d.id = p.delivery_id AND d.company_id = p.company_id JOIN orders o ON o.id = d.order_id AND o.company_id = d.company_id WHERE p.delivery_id = ? AND p.company_id = ? AND o.customer_id = ?`, [Number(req.params.id), req.companyId, req.user.customer_id]))[0];
   if (!proof) return res.status(404).json({ message: 'Proof of delivery not found.' });
   res.json(proof);
+});
+
+// Native driver uploads the actual bytes before a completion records proof metadata.
+// File paths are server-managed, outside public assets. Never trust a caller-supplied key.
+app.post('/api/driver/deliveries/:id/proof-upload', requireRole(...mobileDriverRoles), async (req, res) => {
+  try {
+    const deliveryId = Number(req.params.id);
+    const rows = await query('SELECT id, status FROM deliveries WHERE id = ? AND company_id = ? AND driver_id = ?', [deliveryId, req.companyId, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'Assigned delivery not found.' });
+    if (['delivered', 'failed', 'partially_delivered'].includes(rows[0].status)) return res.status(409).json({ message: 'Delivery is closed.' });
+    const kind = String(req.body?.kind || '');
+    if (!['signature', 'photo'].includes(kind)) return res.status(400).json({ message: 'Proof must be signature or photo.' });
+    const value = String(req.body?.imageBase64 || '');
+    if (value.length < 8 || value.length > 3 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+      return res.status(400).json({ message: 'Invalid proof image encoding or size.' });
+    }
+    const bytes = Buffer.from(value, 'base64');
+    if (!bytes.length || bytes.length > 2 * 1024 * 1024) return res.status(400).json({ message: 'Proof image must be under 2MB.' });
+    const isPng = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+    const isJpeg = bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9;
+    if (!isPng && !isJpeg) return res.status(400).json({ message: 'Only real PNG/JPEG proof images are accepted.' });
+    const root = process.env.TEMO_PROOF_STORAGE_DIR || path.join(__dirname, 'private-proofs');
+    const storageKey = [String(req.companyId), String(deliveryId), crypto.randomBytes(16).toString('hex') + (isPng ? '.png' : '.jpg')].join('/');
+    const fullPath = path.join(root, storageKey);
+    await fs.promises.mkdir(path.dirname(fullPath), { recursive: true, mode: 0o700 });
+    await fs.promises.writeFile(fullPath, bytes, { flag: 'wx', mode: 0o600 });
+    const metadata = {
+      storageKey, contentType: isPng ? 'image/png' : 'image/jpeg',
+      byteSize: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex')
+    };
+    res.status(201).json({ success: true, proof: metadata });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to store proof. Try again when connected.' });
+  }
 });
 
 app.post('/api/driver/deliveries/:id/action', requireRole(...mobileDriverRoles), async (req, res) => {
@@ -6626,4 +6772,9 @@ function startServer(port) {
   });
 }
 
-startServer(PORT);
+ensureSecureAdminBootstrap()
+  .then(() => startServer(PORT))
+  .catch((error) => {
+    console.error('Startup security check failed:', error.message);
+    db.close(() => process.exit(1));
+  });

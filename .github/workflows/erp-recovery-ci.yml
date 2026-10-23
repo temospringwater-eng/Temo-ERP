@@ -1,0 +1,77 @@
+name: ERP Recovery Validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server.js"
+      - "package.json"
+      - "package-lock.json"
+      - "services/**"
+      - "public/**"
+      - "tests/**"
+      - "scripts/**"
+      - "android-driver/**"
+      - ".github/workflows/erp-recovery-ci.yml"
+  workflow_dispatch:
+concurrency:
+  group: erp-recovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Guard against committed runtime databases and secrets
+        run: |
+          python3 - <<'PY'
+          from pathlib import PurePosixPath
+          import subprocess
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          blocked = []
+          for item in tracked:
+              if not item:
+                  continue
+              name = PurePosixPath(item).name.lower()
+              env_secret = (name == '.env' or name.startswith('.env.')) and name != '.env.example'
+              data_file = name.endswith(('.db', '.db-wal', '.db-shm', '.sqlite', '.sqlite3'))
+              if env_secret or data_file:
+                  blocked.append(item)
+          if blocked:
+              print('FAIL: committed credentials or SQLite files detected:')
+              for item in blocked:
+                  print(' - ' + item)
+              raise SystemExit(1)
+          print('PASS: no tracked runtime DB or .env secret files')
+          PY
+      - name: Check mandatory source files
+        run: |
+          test -f server.js
+          test -f public/index.html
+          test -f services/forecasting-service.js
+          test -f services/platform-operations-service.js
+          test -f tests/api-smoke.test.js
+      - name: Verify JavaScript syntax
+        run: |
+          find services public tests -name '*.js' -type f -print0 | xargs -0 -r -n1 node --check
+      - name: Install dependencies
+        run: npm ci
+      - name: Run automated tests
+        # Ephemeral CI database only. Never use these sample credentials outside NODE_ENV=test.
+        env:
+          NODE_ENV: test
+          TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: admin123
+          TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: admin123
+        run: npm test
+
+      - name: Verify non-destructive SQLite restore drill
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Private staging health validation
+        run: node scripts/private-https-staging-qa.js
