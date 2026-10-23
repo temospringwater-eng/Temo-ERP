@@ -1,10 +1,21 @@
 name: ERP Recovery Validation
 on:
-  push:
-    branches: ["recovery/complete-source-2026-10-23"]
   pull_request:
     branches: [main]
+    paths:
+      - "server.js"
+      - "package.json"
+      - "package-lock.json"
+      - "services/**"
+      - "public/**"
+      - "tests/**"
+      - "scripts/**"
+      - "android-driver/**"
+      - ".github/workflows/erp-recovery-ci.yml"
   workflow_dispatch:
+concurrency:
+  group: erp-recovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
