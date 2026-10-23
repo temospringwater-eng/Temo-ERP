@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// This is a fully native Activity: no WebView, no /index.html, no admin navigation.
+// This Android Activity uses only native controls and dedicated driver API routes.
 public final class MainActivity extends Activity {
     private static final int BLUE = Color.rgb(12, 65, 95);
     private static final int LIGHT = Color.rgb(238, 246, 249);
