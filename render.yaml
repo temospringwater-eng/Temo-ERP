@@ -21,6 +21,6 @@ services:
       - key: TEMO_STAGING_GATE_SECRET
         sync: false
       - key: TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD
-        sync: false
+        generateValue: true
       - key: TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD
         sync: false
