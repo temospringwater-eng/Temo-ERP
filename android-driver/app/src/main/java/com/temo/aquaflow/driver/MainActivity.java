@@ -96,6 +96,17 @@ public final class MainActivity extends Activity {
             (uri.getPort() == allowed.getPort());
     }
 
+    // Protected Cloudflare test tunnels authenticate through this one trusted
+    // broker. Keep that redirect inside this WebView so login cookies stay here.
+    private boolean trustedCloudflareLogin(Uri uri) {
+        if (uri == null || siteOrigin == null ||
+            !"https".equalsIgnoreCase(uri.getScheme())) return false;
+        String configuredHost = Uri.parse(siteOrigin).getHost();
+        return configuredHost != null &&
+            configuredHost.toLowerCase(java.util.Locale.ROOT).endsWith(".trycloudflare.com") &&
+            "login.trycloudflare.com".equalsIgnoreCase(uri.getHost());
+    }
+
     private void openPortal(String url) {
         siteOrigin = url;
         web = new WebView(this);
@@ -106,10 +117,15 @@ public final class MainActivity extends Activity {
         web.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
         web.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         CookieManager.getInstance().setAcceptCookie(true);
+        String qaHost = Uri.parse(url).getHost();
+        if (qaHost != null && qaHost.toLowerCase(java.util.Locale.ROOT).endsWith(".trycloudflare.com")) {
+            // Required for email PIN login redirects during temporary QA.
+            CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
+        }
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                if (sameOrigin(uri)) return false;
+                if (sameOrigin(uri) || trustedCloudflareLogin(uri)) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception e) { error("No app available for this link"); }
                 return true;
             }
