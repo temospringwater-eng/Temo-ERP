@@ -34,7 +34,7 @@ function fixture(){
   "CREATE TABLE service_areas(id INTEGER PRIMARY KEY,company_id INTEGER,level TEXT,name TEXT,active INTEGER DEFAULT 1)",
   "CREATE TABLE service_area_drivers(company_id INTEGER,service_area_id INTEGER,driver_id INTEGER,assigned_by INTEGER,PRIMARY KEY(company_id,service_area_id,driver_id))",
   "CREATE TABLE customer_service_areas(company_id INTEGER,service_area_id INTEGER,customer_id INTEGER,PRIMARY KEY(company_id,customer_id))",
-  "CREATE TABLE delivery_routes(id INTEGER PRIMARY KEY,company_id INTEGER,name TEXT,route_date TEXT,driver_id INTEGER)",
+  "CREATE TABLE delivery_routes(id INTEGER PRIMARY KEY,company_id INTEGER,name TEXT,area TEXT,route_date TEXT,driver_id INTEGER,status TEXT DEFAULT 'planned',created_by INTEGER)",
   "CREATE TABLE delivery_route_stops(id INTEGER PRIMARY KEY,company_id INTEGER,route_id INTEGER,delivery_id INTEGER,sequence INTEGER,status TEXT)",
   "CREATE TABLE stock_movements(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER,warehouse_id INTEGER,product_id INTEGER,movement_type TEXT,quantity INTEGER,reference TEXT,created_by INTEGER)"
  ].join(';')+';');
@@ -154,4 +154,33 @@ test('QA disabled: no field read or mutation executes',async t=>{
  createDriverFieldOpsQa({app:paths,sqlite3:{Database:SQLite3Compat},dbPath:path.join(f.dir,'disposable.db'),query:async()=>[],qaEnabled:false});
  const res={status(n){this.code=n;return this},json(v){this.body=v;return this}};
  await paths.route({body:{}},res);assert.equal(res.code,503);
+});
+
+
+test('Admin zone scheduling creates ordered, scoped stops once and prevents competing active routes',async t=>{
+ const f=fixture();t.after(f.close);await f.grant('view_zone');
+ await f.make('post','/api/admin/driver/field/zones/assign',{...f.admin,body:{driverId:3,zoneId:1}});
+ const body={idempotencyKey:'admin11-route-new-001',driverId:3,zoneId:1,routeDate:'2026-10-26',name:'Tomorrow Route',deliveryIds:[301]};
+ // Existing route already contains this active stop, refuse reassignment.
+ assert.equal((await f.make('post','/api/admin/driver/field/routes/schedule',{...f.admin,body})).code,409);
+ f.db.exec("UPDATE delivery_routes SET status='completed' WHERE id=1");
+ const first=await f.make('post','/api/admin/driver/field/routes/schedule',{...f.admin,body});
+ assert.equal(first.body.success,true);assert.equal(first.body.stops,1);
+ assert.equal((await f.make('post','/api/admin/driver/field/routes/schedule',{...f.admin,body})).body.routeId,first.body.routeId);
+ assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM delivery_routes').get().n,3);
+ assert.equal(f.db.prepare('SELECT sequence FROM delivery_route_stops WHERE route_id=?').get(first.body.routeId).sequence,1);
+ assert.equal((await f.make('post','/api/admin/driver/field/routes/schedule',{...f.admin,body:{...body,idempotencyKey:'admin11-route-foreign',deliveryIds:[302]}})).code,409);
+});
+test('Admin van return credits only loaded quantity; stock and receipt rollback on excess return',async t=>{
+ const f=fixture();t.after(f.close);await f.grant('view_van_stock');
+ const load={idempotencyKey:'admin11-load-return-001',driverId:3,productId:10,quantity:8};
+ assert.equal((await f.make('post','/api/admin/driver/field/van-stock/load',{...f.admin,body:load})).code,200);
+ const send={idempotencyKey:'admin11-return-001',driverId:3,productId:10,quantity:3};
+ const first=await f.make('post','/api/admin/driver/field/van-stock/return',{...f.admin,body:send});
+ assert.equal(first.body.returnedQuantity,3);
+ assert.equal((await f.make('post','/api/admin/driver/field/van-stock/return',{...f.admin,body:send})).body.returnedQuantity,3);
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=10').get().stock,15);
+ assert.equal((await f.make('get',api+'/van-stock')).body.items[0].quantity,5);
+ assert.equal((await f.make('post','/api/admin/driver/field/van-stock/return',{...f.admin,body:{...send,idempotencyKey:'admin11-return-002',quantity:6}})).code,409);
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=10').get().stock,15);
 });
