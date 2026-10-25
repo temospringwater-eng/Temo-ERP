@@ -32,7 +32,7 @@ function createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAud
     if(email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       throw issueError(503,'Customer email OTP delivery unavailable');
     const otp=generate();
-    if(!/^\\d{6}$/.test(otp))throw issueError(503,'OTP provider unavailable');
+    if(!/^\d{6}$/.test(otp))throw issueError(503,'OTP provider unavailable');
     const digest=crypto.createHash('sha256').update(otp).digest('hex');
     // Reserve one of three hourly delivery slots INSIDE ONE SQLite statement.
     // COUNT then INSERT in separate awaits previously allowed parallel OTP spam.
