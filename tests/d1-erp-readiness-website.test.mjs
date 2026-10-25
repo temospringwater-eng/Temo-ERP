@@ -101,3 +101,28 @@ test('TDD: ERP login never ships hardcoded admin/admin123 prefills',()=>{
  assert.doesNotMatch(html,/id="loginPassword"[^>]*value="admin123"/i);
  assert.doesNotMatch(html,/id="loginUsername"[^>]*value="admin"/i);
 });
+
+test('TDD: customer app order read must require verified customer identity and isolate companies',async t=>{
+ const f=syntheticD1();t.after(f.close);
+ const {createD1CustomerReadOnlyHandler}=await import('../services/d1-customer-readonly-worker-qa.mjs');
+ const handler=createD1CustomerReadOnlyHandler({resolveActor:async(req)=>{
+   return req.headers.get('X-QA-Customer')==='yes'?{companyId:1,customerId:41,role:'customer'}:null;
+ }});
+ const own=await handler(new Request('https://qa.invalid/api/customer/orders/201',{headers:{'X-QA-Customer':'yes'}}),{DB:f.d1});
+ assert.equal(own.status,200);
+ assert.deepEqual(await own.json(),{id:201,company_id:1,customer_id:41,status:'assigned'});
+ const denied=await handler(new Request('https://qa.invalid/api/customer/orders/202',{headers:{'X-QA-Customer':'yes'}}),{DB:f.d1});
+ assert.equal(denied.status,404);
+ const noAuth=await handler(new Request('https://qa.invalid/api/customer/orders/201'),{DB:f.d1});
+ assert.equal(noAuth.status,401);
+});
+test('TDD: customer app cannot bypass company scope with URL parameters or write orders',async t=>{
+ const f=syntheticD1();t.after(f.close);
+ const {createD1CustomerReadOnlyHandler}=await import('../services/d1-customer-readonly-worker-qa.mjs');
+ const handler=createD1CustomerReadOnlyHandler({resolveActor:async()=>({companyId:1,customerId:41,role:'customer'})});
+ const tamper=await handler(new Request('https://qa.invalid/api/customer/orders/202?companyId=2&customerId=42'),{DB:f.d1});
+ assert.equal(tamper.status,404);
+ const write=await handler(new Request('https://qa.invalid/api/customer/orders/201',{method:'POST'}),{DB:f.d1});
+ assert.equal(write.status,405);
+ assert.equal(f.db.prepare('SELECT status FROM orders WHERE id=202').get().status,'assigned');
+});
