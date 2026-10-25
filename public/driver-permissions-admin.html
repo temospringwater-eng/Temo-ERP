@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>TEMO Driver Permissions — Company Admin QA</title>
+  <style>
+   :root {color-scheme:light; font:16px system-ui,sans-serif}
+   body {margin:0;background:#edf5fa;color:#103951}
+   main {max-width:740px;margin:32px auto;padding:24px}
+   h1 {font-size:1.7rem}
+   .card {background:white;border-radius:12px;padding:24px;box-shadow:0 2px 10px #10395114}
+   .permission-row {display:flex;justify-content:space-between;align-items:center;
+     border-bottom:1px solid #dce8f0;padding:14px 0;gap:12px}
+   .permission-row input {width:22px;height:22px;accent-color:#0c415f}
+   select,button {padding:12px;border:1px solid #afc6d5;border-radius:8px;font:inherit}
+   select {min-width:220px;max-width:100%}
+   button {background:#0c415f;color:white;cursor:pointer}
+   button:disabled,select:disabled {opacity:.55;cursor:not-allowed}
+   #permissionStatus[data-kind="error"] {color:#a42e23}
+   #permissionStatus[data-kind="success"] {color:#176b43}
+   .helper {color:#526c7b}
+   :focus-visible {outline:3px solid #0c80bf;outline-offset:2px}
+  </style>
+  <script type="module" src="/driver-permissions-admin.mjs"></script>
+</head>
+<body>
+ <main>
+  <div class="card">
+   <p class="helper">TEMO ERP · Company Admin · QA</p>
+   <h1>TEMO Driver Permissions</h1>
+   <p class="helper">Assign only the driver features your company allows. All changes require server verification and audit logging.</p>
+   <p><label for="driverSelect">Driver</label></p>
+   <select id="driverSelect" disabled><option value="">Select a driver</option></select>
+   <button id="reloadDrivers" type="button" disabled>Refresh</button>
+   <p id="permissionStatus" role="status" aria-live="polite">Checking account…</p>
+   <div id="permissionList"></div>
+   <p class="helper">QA preview only. This page cannot activate permissions until authenticated backend routes and QA migration are integrated.</p>
+   <p><a href="/">Back to ERP</a></p>
+  </div>
+ </main>
+</body>
+</html>
