@@ -20,6 +20,7 @@ const { getSubscriptionStatus, accessError } = require('./services/subscription-
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
 const {driverPermissionsSchema,driverPermissionAuditTriggers,createDriverPermissionRoutes} = require('./services/driver-permissions-service');
+const {createDriverDeliveryPolicyRoutes} = require('./services/driver-delivery-policy-service');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -2259,6 +2260,7 @@ app.use('/api', (req, res, next) => {
 });
 
 createDriverPermissionRoutes({app,query,insert});
+createDriverDeliveryPolicyRoutes({app,query});
 aiAutomationService.registerRoutes(app, requireAuth, requireRole);
 whatsappAssistantService.registerRoutes(app, requireAuth, requireRole);
 platformOperationsService.registerRoutes(app, requireAuth, requireRole);
