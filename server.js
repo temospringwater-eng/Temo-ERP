@@ -251,7 +251,7 @@ const whatsappAssistantService = createWhatsAppAssistantService({ db, query, ins
 whatsappAssistantService.initialize();
 const notificationDeliveryService = createNotificationDeliveryService({ query, insert, update });
 const issueCustomerDeliveryOtp = createDriverCustomerOtpProvider({
-  query,insert,writeAudit,sendEmail: params => notificationDeliveryService.sendEmail(params)
+  query,insert,update,writeAudit,sendEmail: params => notificationDeliveryService.sendEmail(params)
 });
 const atomicDriverDeliveryQaHandler=createAtomicDriverDeliveryHandler({
   sqlite3,dbPath,query,qaEnabled:driverAtomicQaEnabled
