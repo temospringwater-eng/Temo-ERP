@@ -4872,6 +4872,14 @@ app.patch('/api/deliveries/:id', requireRole('super_admin', 'company_admin', 'ma
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
+// Isolated QA-only driver field operations. NEVER enable against normal hayrila.db
+// or live ERP; migrations are manually applied only on disposable QA database.
+const {createDriverFieldOpsQa}=require('./services/driver-field-operations-qa');
+const fieldQaDbReady=process.env.NODE_ENV!=='production' &&
+  /(?:^|[\\/])[^\\/]*qa[^\\/]*\.db$/i.test(dbPath) &&
+  process.env.TEMO_DRIVER_FIELD_OPS_QA==='1';
+createDriverFieldOpsQa({app,sqlite3,dbPath,query,qaEnabled:fieldQaDbReady});
+
 const mobileDriverRoles = ['driver', 'delivery_driver'];
 const mobileDeliveryActions = ['start', 'deliver', 'fail', 'reschedule'];
 const proofContentTypes = ['image/png', 'image/jpeg', 'image/webp'];
