@@ -1,0 +1,23 @@
+name: TEMO ERP Driver Permissions Admin QA
+on:
+  pull_request:
+    paths:
+      - 'public/driver-permissions-admin.html'
+      - 'public/driver-permissions-admin.mjs'
+      - 'tests/driver-permissions-admin-ui.test.mjs'
+      - '.github/workflows/driver-admin-permissions-ci.yml'
+permissions:
+  contents: read
+jobs:
+  driver-admin-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit and API integration using disposable mock server
+        run: node --test tests/driver-permissions-admin-ui.test.mjs
+      - name: Admin UI module syntax verification
+        run: node --check public/driver-permissions-admin.mjs
