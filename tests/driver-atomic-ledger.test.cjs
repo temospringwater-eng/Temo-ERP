@@ -92,3 +92,22 @@ test('TDD: stale baseUpdatedAt must not post or consume OTP',t=>{
  assert.equal(f.count('payments'),0);
  assert.equal(f.db.prepare('SELECT verified_at FROM delivery_otp_challenges WHERE id=71').get().verified_at,null);
 });
+test('TDD: five invalid OTP guesses lock the challenge without any financial posting',t=>{
+ const f=fixture();t.after(f.close);
+ for(let n=1;n<=5;n++){
+  assert.throws(()=>f.call({otpCode:'000000'}),/OTP/);
+  assert.equal(f.db.prepare('SELECT attempts FROM delivery_otp_challenges WHERE id=71').get().attempts,n);
+ }
+ assert.throws(()=>f.call(),/OTP/);
+ assert.equal(f.count('payments'),0);
+ assert.equal(f.count('delivery_proofs'),0);
+});
+test('TDD: failing audit insert rolls back all ledger postings and OTP consumption',t=>{
+ const f=fixture();t.after(f.close);
+ f.db.exec("CREATE TRIGGER audit_failure BEFORE INSERT ON audit_logs BEGIN SELECT RAISE(ABORT,'audit failure'); END");
+ assert.throws(()=>f.call(),/audit failure/);
+ for(const table of ['payments','bottle_movements','delivery_proofs','driver_atomic_delivery_receipts','audit_logs'])
+  assert.equal(f.count(table),0,table);
+ assert.equal(f.db.prepare('SELECT status FROM orders WHERE id=201').get().status,'assigned');
+ assert.equal(f.db.prepare('SELECT verified_at FROM delivery_otp_challenges WHERE id=71').get().verified_at,null);
+});
