@@ -19,6 +19,8 @@ const { createDriverPasswordResetService } = require('./services/driver-password
 const { getSubscriptionStatus, accessError } = require('./services/subscription-service');
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
+const {driverPermissionsSchema,createDriverPermissionRoutes} = require('./services/driver-permissions-service');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
@@ -397,6 +399,8 @@ function initializeDatabase() {
         FOREIGN KEY (company_id) REFERENCES companies(id)
       )
     `);
+
+    db.run(driverPermissionsSchema);
 
     db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -2253,6 +2257,7 @@ app.use('/api', (req, res, next) => {
   });
 });
 
+createDriverPermissionRoutes({app,query,insert,writeAudit});
 aiAutomationService.registerRoutes(app, requireAuth, requireRole);
 whatsappAssistantService.registerRoutes(app, requireAuth, requireRole);
 platformOperationsService.registerRoutes(app, requireAuth, requireRole);
