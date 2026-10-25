@@ -36,7 +36,7 @@ function makeAtomicSqliteSession(db){
 }
 function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otpCode,
  signatureProofId,payment={amount:0,method:''},bottleId=null,bottleReturnCount=0,
- emptyCount=0,notes='',baseUpdatedAt}={}){
+ emptyCount=0,notes='',baseUpdatedAt,expectedOrderId}={}){
  if(!db||typeof db.transaction!=='function')reject('Transactional database required');
  if(!actor||actor.role!=='driver'&&actor.role!=='delivery_driver'||
     !validId(actor.id)||!validId(actor.companyId))reject('Driver authorization required');
@@ -57,7 +57,7 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
  const safeNotes=String(notes||'').slice(0,1000);
  const requestHash=hash({deliveryId,otpChallengeId,otpCodeHash:hash(String(otpCode)),
   signatureProofId,payment:{amount,method},bottleId,bottleReturnCount,emptyCount,
-  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null});
+  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null,expectedOrderId:expectedOrderId??null});
  const outcome=db.transaction(tx=>{
   const user=tx.get('SELECT id,company_id,role,active FROM users WHERE id=? AND company_id=?',actor.id,actor.companyId);
   if(!user||user.active!==1||!['driver','delivery_driver'].includes(user.role)||user.role!==actor.role)
@@ -72,6 +72,8 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
       ON o.id=d.order_id AND o.company_id=d.company_id
       WHERE d.id=? AND d.company_id=? AND d.driver_id=?`,deliveryId,actor.companyId,actor.id);
   if(!d)reject('Assigned delivery not found');
+  if(expectedOrderId!==undefined && (!validId(expectedOrderId) || d.order_id!==expectedOrderId))
+    reject('Queued order does not match assigned delivery');
   if(d.status==='delivered'||d.status==='partially_delivered')reject('Delivery already completed');
   if(baseUpdatedAt && d.updated_at!==baseUpdatedAt)reject('stale delivery');
   if(!['assigned','out_for_delivery'].includes(d.status))reject('Delivery not in a valid state');
@@ -131,7 +133,7 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
 }
 async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChallengeId,otpCode,
  signatureProofId,payment={amount:0,method:''},bottleId=null,bottleReturnCount=0,
- emptyCount=0,notes='',baseUpdatedAt}={}){
+ emptyCount=0,notes='',baseUpdatedAt,expectedOrderId}={}){
  if(!db||typeof db.transaction!=='function')reject('Transactional database required');
  if(!actor||actor.role!=='driver'&&actor.role!=='delivery_driver'||
     !validId(actor.id)||!validId(actor.companyId))reject('Driver authorization required');
@@ -152,7 +154,7 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
  const safeNotes=String(notes||'').slice(0,1000);
  const requestHash=hash({deliveryId,otpChallengeId,otpCodeHash:hash(String(otpCode)),
   signatureProofId,payment:{amount,method},bottleId,bottleReturnCount,emptyCount,
-  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null});
+  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null,expectedOrderId:expectedOrderId??null});
  const outcome=await db.transaction(async tx=>{
   const user=await tx.get('SELECT id,company_id,role,active FROM users WHERE id=? AND company_id=?',actor.id,actor.companyId);
   if(!user||user.active!==1||!['driver','delivery_driver'].includes(user.role)||user.role!==actor.role)
@@ -167,6 +169,8 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
       ON o.id=d.order_id AND o.company_id=d.company_id
       WHERE d.id=? AND d.company_id=? AND d.driver_id=?`,deliveryId,actor.companyId,actor.id);
   if(!d)reject('Assigned delivery not found');
+  if(expectedOrderId!==undefined && (!validId(expectedOrderId) || d.order_id!==expectedOrderId))
+    reject('Queued order does not match assigned delivery');
   if(d.status==='delivered'||d.status==='partially_delivered')reject('Delivery already completed');
   if(baseUpdatedAt && d.updated_at!==baseUpdatedAt)reject('stale delivery');
   if(!['assigned','out_for_delivery'].includes(d.status))reject('Delivery not in a valid state');
