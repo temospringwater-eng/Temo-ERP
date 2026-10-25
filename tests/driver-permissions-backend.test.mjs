@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {DatabaseSync} from 'node:sqlite';
 const require=createRequire(import.meta.url);
-const {permissionKeys,normalizePermissions,driverPermissionsSchema,createDriverPermissionRoutes}=
+const {permissionKeys,normalizePermissions,driverPermissionsSchema,driverPermissionAuditTriggers,createDriverPermissionRoutes}=
   require('../services/driver-permissions-service');
 
 function fixture(){
@@ -21,6 +21,7 @@ function fixture(){
     (41,1,'staff',1,'active'),(99,NULL,'super_admin',1,'active');
  `);
  db.exec(driverPermissionsSchema);
+ for(const trigger of driverPermissionAuditTriggers)db.exec(trigger);
  const query=async(sql,values=[])=>db.prepare(sql).all(...values);
  const insert=async(sql,values=[])=>({id:Number(db.prepare(sql).run(...values).lastInsertRowid)});
  const update=async(sql,values=[])=>({changes:Number(db.prepare(sql).run(...values).changes)});
@@ -135,4 +136,13 @@ test('one tenant cannot view another tenant settings even with a valid target ID
  assert.equal((await f.request('GET',admin,{actor:f.persons.admin,targetId:21})).status,404);
  assert.equal((await f.request('GET',me,{actor:f.persons.driver})).json.permissions.view_balance,false);
  assert.equal((await f.request('GET',me,{actor:f.persons.otherDriver})).json.permissions.view_balance,true);
+});
+
+test('audit ledger unavailable blocks grants atomically; no unaudited permission may be applied',async t=>{
+ const f=fixture();t.after(f.close);
+ f.db.exec('DROP TABLE audit_logs');
+ const r=await f.request('PUT',admin,{actor:f.persons.admin,targetId:11,
+   body:{permissions:{view_balance:true}}});
+ assert.equal(r.status,503);
+ assert.equal(f.db.prepare('SELECT COUNT(*) as n FROM driver_permission_settings').get().n,0);
 });
