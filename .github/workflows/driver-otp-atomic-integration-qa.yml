@@ -1,0 +1,41 @@
+name: TEMO ERP Driver OTP Atomic Integration QA
+on:
+  pull_request:
+    paths:
+      - 'server.js'
+      - 'services/driver-customer-otp-provider.js'
+      - 'services/driver-atomic-ledger-qa.js'
+      - 'services/driver-atomic-sqlite3-adapter-qa.js'
+      - 'services/driver-atomic-erp-bridge-qa.js'
+      - 'tests/driver-otp-provider.integration.test.cjs'
+      - 'tests/driver-atomic-sqlite3-adapter.integration.test.cjs'
+      - '.github/workflows/driver-otp-atomic-integration-qa.yml'
+permissions:
+  contents: read
+jobs:
+  otp-atomic-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: OTP provider isolated unit and SQLite integration
+        run: node --experimental-sqlite --test tests/driver-otp-provider.integration.test.cjs
+      - name: Original atomic ledger rollback and idempotency regression
+        run: node --experimental-sqlite --test tests/driver-atomic-ledger.test.cjs
+      - name: Dedicated sqlite3 file-backed transactions integration
+        run: node --experimental-sqlite --test tests/driver-atomic-sqlite3-adapter.integration.test.cjs
+      - name: Strict module and entire ERP server syntax
+        run: |
+          node --check server.js
+          node --check services/driver-customer-otp-provider.js
+          node --check services/driver-atomic-ledger-qa.js
+          node --check services/driver-atomic-sqlite3-adapter-qa.js
+          node --check services/driver-atomic-erp-bridge-qa.js
+      - name: Ensure test-only opt-in and never activate production
+        run: |
+          grep -F "process.env.NODE_ENV==='test'" server.js
+          grep -F "TEMO_DRIVER_ATOMIC_QA_ENABLED" server.js
+          ! grep -qE 'wrangler deploy|cloudflare deploy|npm start|pm2 restart' .github/workflows/driver-otp-atomic-integration-qa.yml
