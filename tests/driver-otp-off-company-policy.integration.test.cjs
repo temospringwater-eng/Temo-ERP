@@ -69,7 +69,7 @@ const operation=(overrides={})=>({
 });
 async function setup(){
  const f=fixture();
- f.db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';ALTER TABLE companies ADD COLUMN status TEXT DEFAULT 'active'");
+ f.db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';ALTER TABLE companies ADD COLUMN status TEXT DEFAULT 'active';ALTER TABLE companies ADD COLUMN active INTEGER DEFAULT 1");
  const query=async(sql,args=[])=>f.db.prepare(sql).all(...args);
  const update=async(sql,args=[])=>({changes:Number(f.db.prepare(sql).run(...args).changes)});
  const handlers={get:{},put:{}};
