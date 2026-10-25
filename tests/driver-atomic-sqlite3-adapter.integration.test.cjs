@@ -4,6 +4,7 @@ const crypto=require('node:crypto');
 const {DatabaseSync}=require('node:sqlite');
 const {completeDeliveryAsync,qaSchema}=require('../services/driver-atomic-ledger-qa');
 const {createSqlite3AtomicAdapter}=require('../services/driver-atomic-sqlite3-adapter-qa');
+const {createAtomicDriverDeliveryHandler}=require('../services/driver-atomic-erp-bridge-qa');
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 class FakeSqlite3Database {
  constructor(filename,flags,callback){
@@ -54,7 +55,7 @@ function fixture(){
     payment:{amount:125,method:'Cash'},bottleId:51,bottleReturnCount:2,emptyCount:3,
     baseUpdatedAt:'2026-10-25 01:00:00', ...body});
  const count=t=>db.prepare('SELECT COUNT(*) n FROM '+t).get().n;
- return {db,call,count,close:()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})}};
+ return {db,filename,call,count,close:()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
 test('real SQLite file + dedicated transactional connection: one exact signed order/cash/bottle posting',async t=>{
  const f=fixture();t.after(f.close);
@@ -87,5 +88,39 @@ test('real SQLite adapter: tenant/driver/proof guards reject foreign mutations',
  await assert.rejects(f.call({actor:{id:21,companyId:2,role:'driver'}}),/Assigned delivery not found/);
  await assert.rejects(f.call({actor:{id:31,companyId:1,role:'company_admin'}}),/Driver authorization required/);
  await assert.rejects(f.call({signatureProofId:123456}),/signature required/);
+ assert.equal(f.count('payments'),0);
+});
+
+test('native action bridge: verified proof, same tenant/driver OTP and atomic receipt',async t=>{
+ const f=fixture();t.after(f.close);
+ const sha=hash('synthetic-image');
+ const query=async(sql,args=[])=>f.db.prepare(sql).all(...args);
+ const handle=createAtomicDriverDeliveryHandler({sqlite3:sqlite3Shim,dbPath:f.filename,query,qaEnabled:true});
+ const request={
+   user:{id:11,role:'driver'},companyId:1,params:{id:'301'},
+   body:{action:'deliver',signature:{storageKey:'1/301/synthetic.png',sha256:sha,
+     contentType:'image/png',byteSize:124},otpChallengeId:71,otpCode:'123456',
+     payment:{amount:125,method:'Cash'},bottleId:51,bottleReturnCount:2,emptyCount:3}
+ };
+ const reply=async()=>{const res={code:200,status(n){this.code=n;return this;},json(data){this.data=data;return this;}};
+   await handle(request,res);return res;};
+ const first=await reply();assert.equal(first.code,200,JSON.stringify(first.data));
+ assert.deepEqual({id:first.data.id,order_id:first.data.order_id,company_id:first.data.company_id,status:first.data.status},
+   {id:301,order_id:201,company_id:1,status:'completed'});
+ const retry=await reply();assert.equal(retry.code,200);
+ assert.equal(f.count('payments'),1);assert.equal(f.count('bottle_movements'),1);assert.equal(f.count('delivery_proofs'),1);
+});
+test('native action bridge: unregistered/forged proof and disabled QA never post money',async t=>{
+ const f=fixture();t.after(f.close);
+ const query=async(sql,args=[])=>f.db.prepare(sql).all(...args);
+ const handle=createAtomicDriverDeliveryHandler({sqlite3:sqlite3Shim,dbPath:f.filename,query,qaEnabled:true});
+ const request={user:{id:11,role:'driver'},companyId:1,params:{id:'301'},
+   body:{signature:{storageKey:'1/301/forged.png',sha256:hash('forged'),contentType:'image/png',byteSize:124}}};
+ let res={code:200,status(n){this.code=n;return this;},json(x){this.data=x;return this;}};
+ await handle(request,res);assert.equal(res.code,400);
+ assert.equal(f.count('payments'),0);
+ const disabled=createAtomicDriverDeliveryHandler({sqlite3:sqlite3Shim,dbPath:f.filename,query,qaEnabled:false});
+ res={code:200,status(n){this.code=n;return this;},json(x){this.data=x;return this;}};
+ await disabled(request,res);assert.equal(res.code,503);
  assert.equal(f.count('payments'),0);
 });
