@@ -13,7 +13,7 @@ The suite uses a new `:memory:` SQLite database per test with synthetic companie
 customers, bottles, orders, deliveries and OTP challenges. No secrets, real customers,
 production database connections, Cloudflare Worker, real proof uploads or network calls.
 
-**Verified in a disposable local Node 22 environment on 2026-10-25: 8/8 tests passed.**
+**Verified in a disposable local Node 22 environment on 2026-10-25: 10/10 tests passed.**
 GitHub CI result must be evaluated independently; a job that failed before its steps ran
 cannot be called green.
 
@@ -27,6 +27,8 @@ cannot be called green.
 6. Invalid/expired OTP cannot write ledgers; invalid attempts are tracked.
 7. Unknown signature proof ID, foreign bottle, negative cash/counts are rejected.
 8. Stale order/delivery baseline cannot complete or consume an OTP.
+9. Five invalid OTP guesses lock the challenge without any ledger posting.
+10. An injected audit INSERT failure rolls back all transaction participants, including OTP.
 
 ### Remaining integration blockers
 - This is a synchronous `node:sqlite` **test adapter**, NOT connected to the existing
