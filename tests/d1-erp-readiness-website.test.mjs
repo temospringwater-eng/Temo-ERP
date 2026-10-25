@@ -20,7 +20,7 @@ const sqlNamesFromRepo=()=>{
 };
 function syntheticD1(){
  const db=new DatabaseSync(':memory:');
- db.exec("CREATE TABLE companies(id INTEGER PRIMARY KEY);CREATE TABLE users(id INTEGER PRIMARY KEY,company_id INTEGER,role TEXT,active INTEGER);CREATE TABLE orders(id INTEGER PRIMARY KEY,company_id INTEGER,customer_id INTEGER,status TEXT);CREATE TABLE deliveries(id INTEGER PRIMARY KEY,company_id INTEGER,order_id INTEGER,driver_id INTEGER,status TEXT);INSERT INTO users VALUES(11,1,'driver',1),(12,1,'driver',0),(21,2,'driver',1);INSERT INTO orders VALUES(201,1,41,'assigned'),(202,2,42,'assigned');INSERT INTO deliveries VALUES(301,1,201,11,'assigned'),(302,2,202,21,'assigned');");
+ db.exec("CREATE TABLE companies(id INTEGER PRIMARY KEY);CREATE TABLE users(id INTEGER PRIMARY KEY,company_id INTEGER,role TEXT,is_active INTEGER);CREATE TABLE orders(id INTEGER PRIMARY KEY,company_id INTEGER,customer_id INTEGER,status TEXT);CREATE TABLE deliveries(id INTEGER PRIMARY KEY,company_id INTEGER,order_id INTEGER,driver_id INTEGER,status TEXT);INSERT INTO users VALUES(11,1,'driver',1),(12,1,'driver',0),(21,2,'driver',1);INSERT INTO orders VALUES(201,1,41,'assigned'),(202,2,42,'assigned');INSERT INTO deliveries VALUES(301,1,201,11,'assigned'),(302,2,202,21,'assigned');");
  const queries=[];
  const d1={prepare(sql){
    queries.push(sql);
@@ -125,4 +125,13 @@ test('TDD: customer app cannot bypass company scope with URL parameters or write
  const write=await handler(new Request('https://qa.invalid/api/customer/orders/201',{method:'POST'}),{DB:f.d1});
  assert.equal(write.status,405);
  assert.equal(f.db.prepare('SELECT status FROM orders WHERE id=202').get().status,'assigned');
+});
+
+test('Verified Cloudflare users.is_active: inactive driver must not view assigned delivery',async t=>{
+ const f=syntheticD1();t.after(f.close);
+ const handler=createD1DriverReadOnlyHandler({resolveActor:async()=>({id:11,companyId:1,role:'driver'})});
+ const uri='https://qa.invalid/api/driver/deliveries/301';
+ assert.equal((await handler(new Request(uri),{DB:f.d1})).status,200);
+ f.db.exec('UPDATE users SET is_active=0 WHERE id=11');
+ assert.equal((await handler(new Request(uri),{DB:f.d1})).status,404);
 });
