@@ -37,8 +37,8 @@ function createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAud
     // Reserve one of three hourly delivery slots INSIDE ONE SQLite statement.
     // COUNT then INSERT in separate awaits previously allowed parallel OTP spam.
     const slots=await query(`INSERT INTO delivery_otp_challenges
-      (company_id,delivery_id,customer_id,code_hash,expires_at,created_by)
-      SELECT ?,?,?,?,datetime('now','+10 minutes'),?
+      (company_id,delivery_id,customer_id,code_hash,expires_at,created_by,attempts)
+      SELECT ?,?,?,?,datetime('now','-1 second'),?,5
       WHERE (SELECT COUNT(*) FROM delivery_otp_challenges
         WHERE company_id=? AND delivery_id=?
           AND created_at>=datetime('now','-1 hour')) < 3
@@ -59,14 +59,17 @@ function createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAud
           '. It expires in 10 minutes. Do not share it with anyone except at delivery.'
       });
       if(sent?.status!=='sent')throw issueError(503,'Customer OTP delivery provider unavailable');
+      // Never create a redeemable OTP before provider acceptance.
+      // The row starts locked (attempts=5, expired) and only this guarded
+      // database update can activate it after successful provider delivery.
+      const activated=await update(`UPDATE delivery_otp_challenges
+        SET attempts=0,expires_at=datetime('now','+10 minutes')
+        WHERE id=? AND company_id=? AND attempts=5 AND verified_at IS NULL`,
+        [challengeId,Number(companyId)]);
+      if(activated?.changes!==1)throw issueError(503,'Customer OTP activation unavailable');
     }catch(_error){
-      // Never leave a redeemable OTP when audit or SMTP delivery failed.
-      // Preserve the reservation for anti-spam accounting even on provider failure.
-      try{
-        await update(`UPDATE delivery_otp_challenges
-          SET expires_at=datetime('now','-1 second'),attempts=5
-          WHERE id=? AND company_id=?`,[challengeId,Number(companyId)]);
-      }catch(_ignored){ /* Provider stays unavailable: no success response. */ }
+      // Reservation was already locked and expired before audit/SMTP.
+      // A failed update cannot accidentally leave a redeemable challenge.
       throw issueError(503,'Customer OTP delivery provider unavailable');
     }
     return {challengeId,expiresInSeconds:600,maskedDestination:maskEmail(email)};
