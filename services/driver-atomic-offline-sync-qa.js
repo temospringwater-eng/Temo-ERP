@@ -5,6 +5,7 @@
 // This isolated adapter supports only already-uploaded signed proof + valid OTP.
 // OTP-OFF/local base64 remains pending until separately verified policy/proof staging.
 const {completeDeliveryAsync}=require('./driver-atomic-ledger-qa');
+const {readQaOtpRequired}=require('./driver-delivery-policy-service');
 const {createSqlite3AtomicAdapter}=require('./driver-atomic-sqlite3-adapter-qa');
 const validId=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
 const validKey=v=>typeof v==='string'&&/^[A-Za-z0-9._:-]{8,110}$/.test(v);
@@ -51,10 +52,14 @@ function createAtomicOfflineSyncHandler({sqlite3,dbPath,query,qaEnabled}){
       !Number.isSafeInteger(Number(proof.byteSize))||Number(proof.byteSize)<1){
     results.push(genericConflict(key,'verified_proof_required'));continue;
    }
-   if(!validId(payload.otpChallengeId)||!/^\d{6}$/.test(String(payload.otpCode||''))){
-    results.push(genericConflict(key,'customer_otp_required'));continue;
-   }
    try{
+    // Company OTP policy is read from trusted QA database, never the driver.
+    const otpRequired=await readQaOtpRequired(query,companyId,true);
+    if(otpRequired&&(!validId(payload.otpChallengeId)||
+       !/^\\d{6}$/.test(String(payload.otpCode||'')))){
+      results.push(genericConflict(key,'customer_otp_required'));continue;
+    }
+
     // Scope proof and order to authenticated driver/company BEFORE entering
     // transaction; expectedOrderId is independently checked again INSIDE tx.
     const rows=await query(`SELECT d.order_id,p.id AS proof_id
@@ -70,7 +75,7 @@ function createAtomicOfflineSyncHandler({sqlite3,dbPath,query,qaEnabled}){
     }
     const outcome=await completeDeliveryAsync({
       db,actor:{id:driverId,companyId,role:actor.role},
-      deliveryId,expectedOrderId:orderId,
+      deliveryId,expectedOrderId:orderId,otpRequired,
       idempotencyKey:'offline:'+key,
       signatureProofId:Number(rows[0].proof_id),
       otpChallengeId:Number(payload.otpChallengeId),otpCode:String(payload.otpCode),
