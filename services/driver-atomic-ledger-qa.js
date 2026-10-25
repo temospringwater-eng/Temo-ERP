@@ -15,7 +15,10 @@ const qaSchema=Object.freeze([
  `CREATE TABLE IF NOT EXISTS driver_atomic_delivery_receipts(
    company_id INTEGER NOT NULL,driver_id INTEGER NOT NULL,delivery_id INTEGER NOT NULL UNIQUE,
    idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,receipt_json TEXT NOT NULL,
-   PRIMARY KEY(company_id,driver_id,idempotency_key))`
+   PRIMARY KEY(company_id,driver_id,idempotency_key))`,
+ `CREATE TABLE IF NOT EXISTS driver_qa_company_verification_policy(
+    company_id INTEGER PRIMARY KEY,otp_required INTEGER NOT NULL DEFAULT 1
+    CHECK(otp_required IN (0,1)),updated_by INTEGER)`
 ]);
 // Disposable node:sqlite adapter is for unit/integration QA, not for running
 // the legacy Express sqlite3 connection or changing a production database.
@@ -36,14 +39,15 @@ function makeAtomicSqliteSession(db){
 }
 function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otpCode,
  signatureProofId,payment={amount:0,method:''},bottleId=null,bottleReturnCount=0,
- emptyCount=0,notes='',baseUpdatedAt,expectedOrderId}={}){
+ emptyCount=0,notes='',baseUpdatedAt,expectedOrderId,otpRequired=true}={}){
  if(!db||typeof db.transaction!=='function')reject('Transactional database required');
  if(!actor||actor.role!=='driver'&&actor.role!=='delivery_driver'||
     !validId(actor.id)||!validId(actor.companyId))reject('Driver authorization required');
- if(!validId(deliveryId)||!validId(signatureProofId)||!validId(otpChallengeId))
+ if(!validId(deliveryId)||!validId(signatureProofId)||
+    (otpRequired&&!validId(otpChallengeId))||typeof otpRequired!=='boolean')
    reject('Valid delivery, signature proof and OTP challenge required');
  if(!/^[A-Za-z0-9._:-]{8,128}$/.test(String(idempotencyKey||'')))reject('Valid idempotency key required');
- if(!/^\d{6}$/.test(String(otpCode||'')))reject('Valid customer OTP required');
+ if(otpRequired&&!/^\d{6}$/.test(String(otpCode||'')))reject('Valid customer OTP required');
  const amount=Number(payment?.amount??0);
  if(!Number.isFinite(amount)||amount<0||!Number.isSafeInteger(Math.round(amount*100))||
     Math.abs(Math.round(amount*100)-amount*100)>1e-7)reject('Invalid payment amount');
@@ -57,7 +61,7 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
  const safeNotes=String(notes||'').slice(0,1000);
  const requestHash=hash({deliveryId,otpChallengeId,otpCodeHash:hash(String(otpCode)),
   signatureProofId,payment:{amount,method},bottleId,bottleReturnCount,emptyCount,
-  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null,expectedOrderId:expectedOrderId??null});
+  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null,expectedOrderId:expectedOrderId??null,otpRequired});
  const outcome=db.transaction(tx=>{
   const user=tx.get('SELECT id,company_id,role,active FROM users WHERE id=? AND company_id=?',actor.id,actor.companyId);
   if(!user||user.active!==1||!['driver','delivery_driver'].includes(user.role)||user.role!==actor.role)
@@ -74,6 +78,8 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
   if(!d)reject('Assigned delivery not found');
   if(expectedOrderId!==undefined && (!validId(expectedOrderId) || d.order_id!==expectedOrderId))
     reject('Queued order does not match assigned delivery');
+  const companyPolicy=tx.get('SELECT otp_required FROM driver_qa_company_verification_policy WHERE company_id=?',actor.companyId);
+  if(otpRequired!==(companyPolicy?companyPolicy.otp_required===1:true))reject('Company OTP policy changed or invalid');
   if(d.status==='delivered'||d.status==='partially_delivered')reject('Delivery already completed');
   if(baseUpdatedAt && d.updated_at!==baseUpdatedAt)reject('stale delivery');
   if(!['assigned','out_for_delivery'].includes(d.status))reject('Delivery not in a valid state');
@@ -87,7 +93,9 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
     reject('Server-verified customer signature required');
   if(bottleId!=null){const bottle=tx.get('SELECT id FROM bottles WHERE id=? AND company_id=? AND active=1',bottleId,actor.companyId);
     if(!bottle)reject('Bottle is not owned by driver company');}
-  const otp=tx.get(`SELECT id,code_hash,attempts,expires_at FROM delivery_otp_challenges
+  let otp=null;
+  if(otpRequired){
+  otp=tx.get(`SELECT id,code_hash,attempts,expires_at FROM delivery_otp_challenges
       WHERE id=? AND company_id=? AND delivery_id=? AND verified_at IS NULL`,otpChallengeId,actor.companyId,deliveryId);
   if(!otp||otp.attempts>=5||!otp.expires_at||Date.parse(otp.expires_at+'Z')<=Date.now())
     return {otpFailure:'Customer OTP expired, exhausted or invalid'};
@@ -98,6 +106,7 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
     return {otpFailure:'Customer OTP invalid'};
   }
   tx.run('UPDATE delivery_otp_challenges SET verified_at=CURRENT_TIMESTAMP,attempts=attempts+1 WHERE id=? AND company_id=? AND verified_at IS NULL',otp.id,actor.companyId);
+  }
   const changed=tx.run(`UPDATE deliveries SET status='delivered',delivered_at=CURRENT_TIMESTAMP,
        collected_amount=?,collected_method=?,bottle_return_count=?,empty_count=?,notes=?,
        updated_at=CURRENT_TIMESTAMP WHERE id=? AND company_id=? AND driver_id=? AND status IN ('assigned','out_for_delivery')`,
@@ -118,8 +127,8 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
   }
   tx.run(`INSERT INTO delivery_proofs(company_id,delivery_id,otp_challenge_id,otp_verified_at,
        signature_storage_key,signature_content_type,signature_byte_size,signature_sha256,captured_at,captured_by)
-       VALUES(?,?,?,CURRENT_TIMESTAMP,?,?,?,?,CURRENT_TIMESTAMP,?)`,
-       actor.companyId,deliveryId,otp.id,proof.storage_key,proof.content_type,proof.byte_size,proof.sha256,actor.id);
+       VALUES(?,?,?,${otpRequired?'CURRENT_TIMESTAMP':'NULL'},?,?,?,?,CURRENT_TIMESTAMP,?)`,
+       actor.companyId,deliveryId,otp?otp.id:null,proof.storage_key,proof.content_type,proof.byte_size,proof.sha256,actor.id);
   const receipt={id:deliveryId,order_id:d.order_id,company_id:actor.companyId,status:'completed'};
   tx.run('INSERT INTO driver_atomic_delivery_receipts(company_id,driver_id,delivery_id,idempotency_key,request_hash,receipt_json) VALUES(?,?,?,?,?,?)',
       actor.companyId,actor.id,deliveryId,idempotencyKey,requestHash,JSON.stringify(receipt));
@@ -133,14 +142,15 @@ function completeDelivery({db,actor,deliveryId,idempotencyKey,otpChallengeId,otp
 }
 async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChallengeId,otpCode,
  signatureProofId,payment={amount:0,method:''},bottleId=null,bottleReturnCount=0,
- emptyCount=0,notes='',baseUpdatedAt,expectedOrderId}={}){
+ emptyCount=0,notes='',baseUpdatedAt,expectedOrderId,otpRequired=true}={}){
  if(!db||typeof db.transaction!=='function')reject('Transactional database required');
  if(!actor||actor.role!=='driver'&&actor.role!=='delivery_driver'||
     !validId(actor.id)||!validId(actor.companyId))reject('Driver authorization required');
- if(!validId(deliveryId)||!validId(signatureProofId)||!validId(otpChallengeId))
+ if(!validId(deliveryId)||!validId(signatureProofId)||
+    (otpRequired&&!validId(otpChallengeId))||typeof otpRequired!=='boolean')
    reject('Valid delivery, signature proof and OTP challenge required');
  if(!/^[A-Za-z0-9._:-]{8,128}$/.test(String(idempotencyKey||'')))reject('Valid idempotency key required');
- if(!/^\d{6}$/.test(String(otpCode||'')))reject('Valid customer OTP required');
+ if(otpRequired&&!/^\d{6}$/.test(String(otpCode||'')))reject('Valid customer OTP required');
  const amount=Number(payment?.amount??0);
  if(!Number.isFinite(amount)||amount<0||!Number.isSafeInteger(Math.round(amount*100))||
     Math.abs(Math.round(amount*100)-amount*100)>1e-7)reject('Invalid payment amount');
@@ -154,7 +164,7 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
  const safeNotes=String(notes||'').slice(0,1000);
  const requestHash=hash({deliveryId,otpChallengeId,otpCodeHash:hash(String(otpCode)),
   signatureProofId,payment:{amount,method},bottleId,bottleReturnCount,emptyCount,
-  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null,expectedOrderId:expectedOrderId??null});
+  notes:safeNotes,baseUpdatedAt:baseUpdatedAt??null,expectedOrderId:expectedOrderId??null,otpRequired});
  const outcome=await db.transaction(async tx=>{
   const user=await tx.get('SELECT id,company_id,role,active FROM users WHERE id=? AND company_id=?',actor.id,actor.companyId);
   if(!user||user.active!==1||!['driver','delivery_driver'].includes(user.role)||user.role!==actor.role)
@@ -171,6 +181,8 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
   if(!d)reject('Assigned delivery not found');
   if(expectedOrderId!==undefined && (!validId(expectedOrderId) || d.order_id!==expectedOrderId))
     reject('Queued order does not match assigned delivery');
+  const companyPolicy=await tx.get('SELECT otp_required FROM driver_qa_company_verification_policy WHERE company_id=?',actor.companyId);
+  if(otpRequired!==(companyPolicy?companyPolicy.otp_required===1:true))reject('Company OTP policy changed or invalid');
   if(d.status==='delivered'||d.status==='partially_delivered')reject('Delivery already completed');
   if(baseUpdatedAt && d.updated_at!==baseUpdatedAt)reject('stale delivery');
   if(!['assigned','out_for_delivery'].includes(d.status))reject('Delivery not in a valid state');
@@ -184,7 +196,9 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
     reject('Server-verified customer signature required');
   if(bottleId!=null){const bottle=await tx.get('SELECT id FROM bottles WHERE id=? AND company_id=? AND active=1',bottleId,actor.companyId);
     if(!bottle)reject('Bottle is not owned by driver company');}
-  const otp=await tx.get(`SELECT id,code_hash,attempts,expires_at FROM delivery_otp_challenges
+  let otp=null;
+  if(otpRequired){
+  otp=await tx.get(`SELECT id,code_hash,attempts,expires_at FROM delivery_otp_challenges
       WHERE id=? AND company_id=? AND delivery_id=? AND verified_at IS NULL`,otpChallengeId,actor.companyId,deliveryId);
   if(!otp||otp.attempts>=5||!otp.expires_at||Date.parse(otp.expires_at+'Z')<=Date.now())
     return {otpFailure:'Customer OTP expired, exhausted or invalid'};
@@ -195,6 +209,7 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
     return {otpFailure:'Customer OTP invalid'};
   }
   await tx.run('UPDATE delivery_otp_challenges SET verified_at=CURRENT_TIMESTAMP,attempts=attempts+1 WHERE id=? AND company_id=? AND verified_at IS NULL',otp.id,actor.companyId);
+  }
   const changed=await tx.run(`UPDATE deliveries SET status='delivered',delivered_at=CURRENT_TIMESTAMP,
        collected_amount=?,collected_method=?,bottle_return_count=?,empty_count=?,notes=?,
        updated_at=CURRENT_TIMESTAMP WHERE id=? AND company_id=? AND driver_id=? AND status IN ('assigned','out_for_delivery')`,
@@ -215,8 +230,8 @@ async function completeDeliveryAsync({db,actor,deliveryId,idempotencyKey,otpChal
   }
   await tx.run(`INSERT INTO delivery_proofs(company_id,delivery_id,otp_challenge_id,otp_verified_at,
        signature_storage_key,signature_content_type,signature_byte_size,signature_sha256,captured_at,captured_by)
-       VALUES(?,?,?,CURRENT_TIMESTAMP,?,?,?,?,CURRENT_TIMESTAMP,?)`,
-       actor.companyId,deliveryId,otp.id,proof.storage_key,proof.content_type,proof.byte_size,proof.sha256,actor.id);
+       VALUES(?,?,?,${otpRequired?'CURRENT_TIMESTAMP':'NULL'},?,?,?,?,CURRENT_TIMESTAMP,?)`,
+       actor.companyId,deliveryId,otp?otp.id:null,proof.storage_key,proof.content_type,proof.byte_size,proof.sha256,actor.id);
   const receipt={id:deliveryId,order_id:d.order_id,company_id:actor.companyId,status:'completed'};
   await tx.run('INSERT INTO driver_atomic_delivery_receipts(company_id,driver_id,delivery_id,idempotency_key,request_hash,receipt_json) VALUES(?,?,?,?,?,?)',
       actor.companyId,actor.id,deliveryId,idempotencyKey,requestHash,JSON.stringify(receipt));
