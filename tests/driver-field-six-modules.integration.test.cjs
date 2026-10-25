@@ -19,13 +19,13 @@ function fixture(enabled=true){
  'CREATE TABLE products(id INTEGER PRIMARY KEY,company_id INTEGER,name TEXT,sale_price REAL,stock INTEGER)',
  'CREATE TABLE orders(id INTEGER PRIMARY KEY,company_id INTEGER,customer_id INTEGER,customer_name TEXT,delivery_address TEXT,notes TEXT,status TEXT,total_amount REAL,created_by INTEGER)',
  'CREATE TABLE order_items(id INTEGER PRIMARY KEY,company_id INTEGER,order_id INTEGER,product_id INTEGER,quantity INTEGER,unit_price REAL,total_price REAL)',
- 'CREATE TABLE deliveries(id INTEGER PRIMARY KEY,company_id INTEGER,order_id INTEGER,driver_id INTEGER)',
+ 'CREATE TABLE deliveries(id INTEGER PRIMARY KEY,company_id INTEGER,order_id INTEGER,driver_id INTEGER,status TEXT)',
  'CREATE TABLE payments(id INTEGER PRIMARY KEY,company_id INTEGER,customer_name TEXT,amount REAL,method TEXT,note TEXT)',
  'CREATE TABLE credit_ledger(id INTEGER PRIMARY KEY,company_id INTEGER,customer_id INTEGER,payment_id INTEGER,entry_type TEXT,amount REAL,note TEXT,created_by INTEGER,due_date TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP)',
  'CREATE TABLE service_areas(id INTEGER PRIMARY KEY,company_id INTEGER,parent_id INTEGER,level TEXT,name TEXT,active INTEGER)',
  'CREATE TABLE customer_service_areas(company_id INTEGER,customer_id INTEGER,service_area_id INTEGER)',
  'CREATE TABLE service_area_drivers(company_id INTEGER,service_area_id INTEGER,driver_id INTEGER,assigned_by INTEGER,PRIMARY KEY(company_id,service_area_id,driver_id))',
- 'CREATE TABLE delivery_routes(id INTEGER PRIMARY KEY,company_id INTEGER,driver_id INTEGER,name TEXT,route_date TEXT)',
+ 'CREATE TABLE delivery_routes(id INTEGER PRIMARY KEY,company_id INTEGER,driver_id INTEGER,name TEXT,route_date TEXT,area TEXT,status TEXT,created_by INTEGER)',
  'CREATE TABLE delivery_route_stops(id INTEGER PRIMARY KEY,company_id INTEGER,route_id INTEGER,delivery_id INTEGER,sequence INTEGER,status TEXT)',
  'CREATE TABLE stock_movements(id INTEGER PRIMARY KEY,company_id INTEGER,warehouse_id INTEGER,product_id INTEGER,movement_type TEXT,quantity INTEGER,reference TEXT,created_by INTEGER)',
  'INSERT INTO companies VALUES(1,1),(2,1)',
@@ -33,11 +33,11 @@ function fixture(enabled=true){
  "INSERT INTO customers VALUES(41,1,'Customer A','05012','QA Street',24.5,46.5),(42,2,'Foreign Customer','05999','Other',NULL,NULL),(43,1,'Not Assigned','05555','Private',NULL,NULL)",
  "INSERT INTO products VALUES(51,1,'19L',450,50),(52,2,'Foreign',500,30)",
  "INSERT INTO orders VALUES(61,1,41,'Customer A','QA Street','','assigned',100,8)",
- 'INSERT INTO deliveries VALUES(71,1,61,3)',
+ "INSERT INTO deliveries VALUES(71,1,61,3,'assigned')",
  "INSERT INTO credit_ledger(company_id,customer_id,entry_type,amount) VALUES(1,41,'invoice',350),(2,42,'invoice',900)",
  "INSERT INTO service_areas VALUES(81,1,NULL,'zone','QA North',1),(82,2,NULL,'zone','Foreign',1)",
  'INSERT INTO customer_service_areas VALUES(1,41,81),(2,42,82)',
- "INSERT INTO delivery_routes VALUES(91,1,3,'AM','2026-10-25'),(92,2,12,'Foreign','2026-10-25')",
+ "INSERT INTO delivery_routes VALUES(91,1,3,'AM','2026-10-25','North','completed',8),(92,2,12,'Foreign','2026-10-25','Foreign','completed',12)",
  "INSERT INTO delivery_route_stops VALUES(101,1,91,71,1,'pending')"
  ];
  for(const sql of tables)db.exec(sql);
@@ -127,4 +127,32 @@ test('Van stock: admin-owned atomic ERP inventory transfer, retry does not doubl
  assert.equal((await f.call('GET','/api/driver/field/van-stock')).data.items[0].quantity,8);
  assert.equal((await f.call('POST','/api/admin/driver/field/van-stock/load',{user:f.admin,body:{...body,idempotencyKey:'out-stock-00001',quantity:999}})).code,409);
  assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,42);
+});
+
+test('Company Admin schedules assigned driver route with ordered stops; no duplicates or foreign deliveries',async t=>{
+ const f=fixture();t.after(f.close);
+ const data={driverId:3,routeDate:'2026-10-25',deliveryIds:[71],name:'QA route',idempotencyKey:'route-schedule-001'};
+ const first=await f.call('POST','/api/admin/driver/field/routes/schedule',{user:f.admin,body:data});
+ assert.equal(first.code,200,JSON.stringify(first.data));assert.equal(first.data.stops,1);
+ assert.equal(f.count('delivery_routes'),3);assert.equal(f.count('delivery_route_stops'),2);
+ assert.deepEqual((await f.call('POST','/api/admin/driver/field/routes/schedule',{user:f.admin,body:data})).data,first.data);
+ const duplicate=await f.call('POST','/api/admin/driver/field/routes/schedule',{user:f.admin,body:{...data,idempotencyKey:'another-route-01'}});
+ assert.equal(duplicate.code,409);assert.equal(f.count('delivery_routes'),3);
+ const foreign=await f.call('POST','/api/admin/driver/field/routes/schedule',{user:f.admin,body:{...data,idempotencyKey:'foreign-route01',deliveryIds:[999]}});
+ assert.equal(foreign.code,409);
+ const driverCannot=await f.call('POST','/api/admin/driver/field/routes/schedule',{body:data});
+ assert.equal(driverCannot.code,403);
+});
+test('Admin van returns are atomic, cannot return beyond driver balance, retry idempotent',async t=>{
+ const f=fixture();t.after(f.close);await f.grant('view_van_stock');
+ const load={driverId:3,productId:51,quantity:8,idempotencyKey:'first-load-001'};
+ assert.equal((await f.call('POST','/api/admin/driver/field/van-stock/load',{user:f.admin,body:load})).code,200);
+ const back={driverId:3,productId:51,quantity:3,idempotencyKey:'return-stock-01'};
+ const first=await f.call('POST','/api/admin/driver/field/van-stock/return',{user:f.admin,body:back});
+ assert.equal(first.code,200,JSON.stringify(first.data));
+ assert.deepEqual((await f.call('POST','/api/admin/driver/field/van-stock/return',{user:f.admin,body:back})).data,first.data);
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,45);
+ assert.equal((await f.call('GET','/api/driver/field/van-stock')).data.items[0].quantity,5);
+ const tooMuch=await f.call('POST','/api/admin/driver/field/van-stock/return',{user:f.admin,body:{...back,idempotencyKey:'return-too-much',quantity:15}});
+ assert.equal(tooMuch.code,409);assert.equal(f.count('driver_field_van_movements'),2);
 });
