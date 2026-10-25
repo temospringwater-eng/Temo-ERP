@@ -23,7 +23,7 @@ export function createD1DriverReadOnlyHandler({resolveActor}={}){
    const structure=await inspectD1ReadOnly(env.DB,['deliveries','users']);
    const required={
     deliveries:['id','company_id','order_id','driver_id','status'],
-    users:['id','company_id','role','active']
+    users:['id','company_id','role','is_active']
    };
    if(Object.entries(required).some(([table,cols])=>cols.some(col=>!structure.columns[table]?.includes(col))))
      return json({message:'ERP QA schema incomplete'},503);
@@ -31,7 +31,7 @@ export function createD1DriverReadOnlyHandler({resolveActor}={}){
     "SELECT id,company_id,order_id,driver_id,status FROM deliveries "+
     "WHERE id=? AND company_id=? AND driver_id=? "+
     "AND EXISTS (SELECT 1 FROM users WHERE id=? AND company_id=? "+
-    "AND active=1 AND role IN ('driver','delivery_driver')) LIMIT 1");
+    "AND is_active=1 AND role IN ('driver','delivery_driver')) LIMIT 1");
    const row=await statement.bind(deliveryId,actor.companyId,actor.id,actor.id,actor.companyId).first();
    if(!row)return json({message:'Assigned delivery not found'},404);
    return json({id:row.id,company_id:row.company_id,order_id:row.order_id,driver_id:row.driver_id,status:row.status},200);
