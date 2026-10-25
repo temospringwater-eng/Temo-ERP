@@ -17,9 +17,10 @@ function setup({sendStatus='sent'}={}){
  const sent=[],audits=[];
  const query=async(sql,args=[])=>db.prepare(sql).all(...args);
  const insert=async(sql,args=[])=>({id:Number(db.prepare(sql).run(...args).lastInsertRowid)});
+ const update=async(sql,args=[])=>({changes:Number(db.prepare(sql).run(...args).changes)});
  const sendEmail=async info=>{sent.push(info);return {status:sendStatus};};
  const writeAudit=async(...args)=>{audits.push(args);};
- const issue=createDriverCustomerOtpProvider({query,insert,sendEmail,writeAudit,randomCode:()=> '123456'});
+ const issue=createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAudit,randomCode:()=> '123456'});
  const call=options=>issue({companyId:1,deliveryId:301,driverId:11,actorId:11,req:{companyId:1,user:{id:11}},...options});
  return{db,sent,audits,call,issue,close:()=>db.close()};
 }
@@ -68,4 +69,22 @@ test('closed delivery cannot request another customer OTP',async t=>{
  f.db.exec("UPDATE deliveries SET status='delivered' WHERE id=301");
  await assert.rejects(f.call(),e=>e.status===409);
  assert.equal(f.sent.length,0);
+});
+
+test('TDD RED: parallel OTP requests reserve only three slots atomically before sending',async t=>{
+ const f=setup();t.after(f.close);
+ const outcomes=await Promise.allSettled(Array.from({length:12},()=>f.call()));
+ const ok=outcomes.filter(x=>x.status==='fulfilled');
+ const denied=outcomes.filter(x=>x.status==='rejected');
+ assert.equal(ok.length,3);
+ assert.equal(denied.length,9);
+ assert.ok(denied.every(x=>x.reason?.status===429));
+ assert.equal(f.sent.length,3,'never email a 4th OTP');
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM delivery_otp_challenges').get().n,3);
+});
+test('TDD RED: absent provider never leaves usable OTP and audit does not claim a dispatched message',async t=>{
+ const f=setup({sendStatus:'skipped'});t.after(f.close);
+ await assert.rejects(f.call(),e=>e.status===503);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM delivery_otp_challenges').get().n,0);
+ assert.equal(f.audits.length,0);
 });
