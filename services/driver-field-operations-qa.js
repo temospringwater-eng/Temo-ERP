@@ -183,6 +183,54 @@ function createDriverFieldOpsQa({app,sqlite3,dbPath,query,qaEnabled=false}){
    return {success:true,driverId:id,productId:product,loadedQuantity:qty,companyId:a.companyId};
   },id);
  }));
+
+ // Company Admin schedules a scoped route with ordered, genuinely assigned deliveries.
+ app.post('/api/admin/driver/field/routes/schedule',response(async req=>{
+  const a=await actor(req,true),p=req.body||{};
+  const id=Number(p.driverId),zone=Number(p.zoneId),date=String(p.routeDate||'');
+  if(!validId(id)||!validId(zone)||!/^\d{4}-\d{2}-\d{2}$/.test(date)||
+     !text(p.name,100)||!Array.isArray(p.deliveryIds)||!p.deliveryIds.length||p.deliveryIds.length>40||
+     p.deliveryIds.some(d=>!validId(d))||new Set(p.deliveryIds.map(Number)).size!==p.deliveryIds.length)
+    throw bad(400,'Driver, zone, ISO date and 1-40 unique assigned deliveries required');
+  return receipt(a,'route-schedule',p,async tx=>{
+   const d=await tx.get("SELECT id FROM users WHERE id=? AND company_id=? AND role IN ('driver','delivery_driver') AND active=1",id,a.companyId);
+   const zoneRow=await tx.get("SELECT id,name FROM service_areas WHERE id=? AND company_id=? AND level IN ('zone','sector','route') AND active=1",zone,a.companyId);
+   const assigned=await tx.get('SELECT service_area_id FROM service_area_drivers WHERE company_id=? AND driver_id=? AND service_area_id=?',a.companyId,id,zone);
+   if(!d||!zoneRow||!assigned)throw bad(404,'Driver is not assigned to selected company zone');
+   for(const deliveryId of p.deliveryIds){
+    const delivery=await tx.get("SELECT id FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND status IN ('assigned','out_for_delivery')",Number(deliveryId),a.companyId,id);
+    if(!delivery)throw bad(409,'Route includes foreign or unavailable delivery');
+    const prior=await tx.get("SELECT rs.id FROM delivery_route_stops rs JOIN delivery_routes r ON r.id=rs.route_id AND r.company_id=rs.company_id WHERE rs.company_id=? AND rs.delivery_id=? AND r.status NOT IN ('completed','cancelled')",a.companyId,Number(deliveryId));
+    if(prior)throw bad(409,'Delivery already belongs to active route');
+   }
+   const routeRow=await tx.run("INSERT INTO delivery_routes(company_id,name,area,driver_id,route_date,status,created_by) VALUES(?,?,?,?,?,'assigned',?)",
+    a.companyId,p.name.trim(),zoneRow.name,id,date,a.driverId);
+   for(let i=0;i<p.deliveryIds.length;i++)
+    await tx.run("INSERT INTO delivery_route_stops(company_id,route_id,delivery_id,sequence,status) VALUES(?,?,?,?,'pending')",
+     a.companyId,routeRow.lastID,Number(p.deliveryIds[i]),i+1);
+   return {success:true,routeId:routeRow.lastID,driverId:id,stops:p.deliveryIds.length,routeDate:date,companyId:a.companyId};
+  },id);
+ }));
+ // Company Admin can return already-loaded physical van stock to warehouse.
+ app.post('/api/admin/driver/field/van-stock/return',response(async req=>{
+  const a=await actor(req,true),p=req.body||{};
+  const id=Number(p.driverId),product=Number(p.productId),qty=Number(p.quantity);
+  if(!validId(id)||!validId(product)||!validId(qty)||qty>10000)
+    throw bad(400,'Valid driver, product and quantity required');
+  return receipt(a,'van-return',p,async tx=>{
+   const d=await tx.get("SELECT id FROM users WHERE id=? AND company_id=? AND role IN ('driver','delivery_driver') AND active=1",id,a.companyId);
+   if(!d)throw bad(404,'Driver not in company');
+   const loaded=await tx.get('SELECT COALESCE(SUM(quantity),0) AS quantity FROM driver_field_van_movements WHERE company_id=? AND driver_id=? AND product_id=?',a.companyId,id,product);
+   if(Number(loaded?.quantity)<qty)throw bad(409,'Cannot return more stock than loaded to van');
+   const updated=await tx.run('UPDATE products SET stock=stock+? WHERE id=? AND company_id=?',qty,product,a.companyId);
+   if(updated.changes!==1)throw bad(404,'ERP product missing');
+   await tx.run("INSERT INTO driver_field_van_movements(company_id,driver_id,product_id,quantity,movement_type,idempotency_key,created_by) VALUES(?,?,?,?,'return',?,?)",
+     a.companyId,id,product,-qty,p.idempotencyKey,a.driverId);
+   await tx.run("INSERT INTO stock_movements(company_id,warehouse_id,product_id,movement_type,quantity,reference,created_by) VALUES(?,NULL,?,'van_return',?,?,?)",
+     a.companyId,product,qty,p.idempotencyKey,a.driverId);
+   return {success:true,driverId:id,productId:product,returnedQuantity:qty,companyId:a.companyId};
+  },id);
+ }));
  return {enabled:qaEnabled};
 }
 module.exports={createDriverFieldOpsQa};
