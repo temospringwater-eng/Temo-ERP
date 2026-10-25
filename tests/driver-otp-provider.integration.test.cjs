@@ -17,9 +17,10 @@ function setup({sendStatus='sent'}={}){
  const sent=[],audits=[];
  const query=async(sql,args=[])=>db.prepare(sql).all(...args);
  const insert=async(sql,args=[])=>({id:Number(db.prepare(sql).run(...args).lastInsertRowid)});
+ const update=async(sql,args=[])=>({changes:Number(db.prepare(sql).run(...args).changes)});
  const sendEmail=async info=>{sent.push(info);return {status:sendStatus};};
  const writeAudit=async(...args)=>{audits.push(args);};
- const issue=createDriverCustomerOtpProvider({query,insert,sendEmail,writeAudit,randomCode:()=> '123456'});
+ const issue=createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAudit,randomCode:()=> '123456'});
  const call=options=>issue({companyId:1,deliveryId:301,driverId:11,actorId:11,req:{companyId:1,user:{id:11}},...options});
  return{db,sent,audits,call,issue,close:()=>db.close()};
 }
@@ -35,11 +36,14 @@ test('SMTP success issues tenant-scoped hashed customer OTP and never exposes co
  assert.equal(saved.company_id,1);assert.equal(saved.created_by,11);
  assert.equal(f.audits.length,1);
 });
-test('provider skipped or failed means no challenge and no false success',async t=>{
+test('provider skipped or failed means no redeemable challenge or false success',async t=>{
  for(const sendStatus of ['skipped','failed']){
   const f=setup({sendStatus});t.after(f.close);
   await assert.rejects(f.call(),e=>e.status===503);
-  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM delivery_otp_challenges').get().n,0);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM delivery_otp_challenges').get().n,1);
+  const invalid=f.db.prepare('SELECT attempts,expires_at FROM delivery_otp_challenges').get();
+  assert.equal(invalid.attempts,5,'SMTP failure must revoke OTP');
+  assert.ok(new Date(invalid.expires_at.replace(' ','T')+'Z').getTime()<Date.now());
  }
 });
 test('driver and customer access must be same tenant, same assigned delivery',async t=>{
@@ -68,4 +72,25 @@ test('closed delivery cannot request another customer OTP',async t=>{
  f.db.exec("UPDATE deliveries SET status='delivered' WHERE id=301");
  await assert.rejects(f.call(),e=>e.status===409);
  assert.equal(f.sent.length,0);
+});
+
+test('TDD RED: parallel OTP requests reserve only three slots atomically before sending',async t=>{
+ const f=setup();t.after(f.close);
+ const outcomes=await Promise.allSettled(Array.from({length:12},()=>f.call()));
+ const ok=outcomes.filter(x=>x.status==='fulfilled');
+ const denied=outcomes.filter(x=>x.status==='rejected');
+ assert.equal(ok.length,3);
+ assert.equal(denied.length,9);
+ assert.ok(denied.every(x=>x.reason?.status===429));
+ assert.equal(f.sent.length,3,'never email a 4th OTP');
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM delivery_otp_challenges').get().n,3);
+});
+test('TDD RED: absent provider never leaves usable OTP and audit does not claim a dispatched message',async t=>{
+ const f=setup({sendStatus:'skipped'});t.after(f.close);
+ await assert.rejects(f.call(),e=>e.status===503);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM delivery_otp_challenges').get().n,1);
+  const invalid=f.db.prepare('SELECT attempts,expires_at FROM delivery_otp_challenges').get();
+  assert.equal(invalid.attempts,5,'SMTP failure must revoke OTP');
+  assert.ok(new Date(invalid.expires_at.replace(' ','T')+'Z').getTime()<Date.now());
+ assert.equal(f.audits.length,1,'only a request audit, not a successful send record');
 });

@@ -8,8 +8,8 @@ const maskEmail = value => {
   const [local,domain] = String(value).split('@');
   return local.slice(0,1) + '***@' + domain;
 };
-function createDriverCustomerOtpProvider({query,insert,sendEmail,writeAudit,randomCode}){
-  if(![query,insert,sendEmail,writeAudit].every(f=>typeof f==='function'))
+function createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAudit,randomCode}){
+  if(![query,insert,update,sendEmail,writeAudit].every(f=>typeof f==='function'))
     throw Error('OTP provider dependencies missing');
   const generate = randomCode || (()=>String(crypto.randomInt(100000,1000000)));
   return async function issue({companyId,deliveryId,actorId,driverId=null,customerId=null,req}={}){
@@ -31,27 +31,45 @@ function createDriverCustomerOtpProvider({query,insert,sendEmail,writeAudit,rand
     const email=String(delivery.email||'').trim();
     if(email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       throw issueError(503,'Customer email OTP delivery unavailable');
-    const rate=(await query(`SELECT COUNT(*) AS n FROM delivery_otp_challenges
-      WHERE company_id=? AND delivery_id=? AND created_at>=datetime('now','-1 hour')`,
-      [Number(companyId),Number(deliveryId)]))[0];
-    if(Number(rate?.n||0)>=3)throw issueError(429,'Too many OTP requests. Try later.');
     const otp=generate();
     if(!/^\d{6}$/.test(otp))throw issueError(503,'OTP provider unavailable');
-    const sent=await sendEmail({
-      recipient:email,type:'driver_delivery_otp',
-      subject:'TEMO Delivery Verification Code',
-      message:'Your TEMO delivery verification code is '+otp+
-        '. It expires in 10 minutes. Do not share it with anyone except at delivery.'
-    });
-    if(sent?.status!=='sent')throw issueError(503,'Customer OTP delivery provider unavailable');
     const digest=crypto.createHash('sha256').update(otp).digest('hex');
-    // Hash only; never persist OTP plaintext, email or provider secret in audit.
-    const created=await insert(`INSERT INTO delivery_otp_challenges
+    // Reserve one of three hourly delivery slots INSIDE ONE SQLite statement.
+    // COUNT then INSERT in separate awaits previously allowed parallel OTP spam.
+    const slots=await query(`INSERT INTO delivery_otp_challenges
       (company_id,delivery_id,customer_id,code_hash,expires_at,created_by)
-      VALUES(?,?,?,?,datetime('now','+10 minutes'),?)`,
-      [Number(companyId),Number(deliveryId),Number(delivery.customer_id),digest,Number(actorId)]);
-    await writeAudit(req,'otp_requested','delivery',Number(deliveryId),null,{challengeId:created.id,delivery:'email'});
-    return {challengeId:created.id,expiresInSeconds:600,maskedDestination:maskEmail(email)};
+      SELECT ?,?,?,?,datetime('now','+10 minutes'),?
+      WHERE (SELECT COUNT(*) FROM delivery_otp_challenges
+        WHERE company_id=? AND delivery_id=?
+          AND created_at>=datetime('now','-1 hour')) < 3
+      RETURNING id`,
+      [Number(companyId),Number(deliveryId),Number(delivery.customer_id),digest,Number(actorId),
+       Number(companyId),Number(deliveryId)]);
+    if(slots.length!==1)throw issueError(429,'Too many OTP requests. Try later.');
+    const challengeId=Number(slots[0].id);
+    if(!validId(challengeId))throw issueError(503,'OTP provider unavailable');
+    try{
+      // Audit must be durable BEFORE provider delivery.
+      await writeAudit(req,'otp_requested','delivery',Number(deliveryId),null,
+        {challengeId,delivery:'email'});
+      const sent=await sendEmail({
+        recipient:email,type:'driver_delivery_otp',
+        subject:'TEMO Delivery Verification Code',
+        message:'Your TEMO delivery verification code is '+otp+
+          '. It expires in 10 minutes. Do not share it with anyone except at delivery.'
+      });
+      if(sent?.status!=='sent')throw issueError(503,'Customer OTP delivery provider unavailable');
+    }catch(_error){
+      // Never leave a redeemable OTP when audit or SMTP delivery failed.
+      // Preserve the reservation for anti-spam accounting even on provider failure.
+      try{
+        await update(`UPDATE delivery_otp_challenges
+          SET expires_at=datetime('now','-1 second'),attempts=5
+          WHERE id=? AND company_id=?`,[challengeId,Number(companyId)]);
+      }catch(_ignored){ /* Provider stays unavailable: no success response. */ }
+      throw issueError(503,'Customer OTP delivery provider unavailable');
+    }
+    return {challengeId,expiresInSeconds:600,maskedDestination:maskEmail(email)};
   };
 }
 module.exports={createDriverCustomerOtpProvider};
