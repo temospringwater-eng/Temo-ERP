@@ -22,11 +22,18 @@ const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = req
 const {driverPermissionsSchema,driverPermissionAuditTriggers,createDriverPermissionRoutes} = require('./services/driver-permissions-service');
 const {createDriverDeliveryPolicyRoutes} = require('./services/driver-delivery-policy-service');
 const {createDriverCustomerOtpProvider} = require('./services/driver-customer-otp-provider');
+const {qaSchema: driverAtomicQaSchema} = require('./services/driver-atomic-ledger-qa');
+const {createAtomicDriverDeliveryHandler} = require('./services/driver-atomic-erp-bridge-qa');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
 const db = new sqlite3.Database(dbPath);
+// Separate explicit TEST-only database; never enable for a live ERP database.
+const driverAtomicQaEnabled=process.env.NODE_ENV==='test' &&
+  process.env.TEMO_DRIVER_ATOMIC_QA_ENABLED==='true' &&
+  Boolean(process.env.DB_PATH) &&
+  path.resolve(dbPath)!==path.resolve(path.join(__dirname,'hayrila.db'));
 
 // Metadata-first storage boundary: file bytes are handled by an external object-storage worker.
 class DocumentStorageAdapter {
@@ -245,6 +252,9 @@ whatsappAssistantService.initialize();
 const notificationDeliveryService = createNotificationDeliveryService({ query, insert, update });
 const issueCustomerDeliveryOtp = createDriverCustomerOtpProvider({
   query,insert,writeAudit,sendEmail: params => notificationDeliveryService.sendEmail(params)
+});
+const atomicDriverDeliveryQaHandler=createAtomicDriverDeliveryHandler({
+  sqlite3,dbPath,query,qaEnabled:driverAtomicQaEnabled
 });
 const driverPasswordResetService = createDriverPasswordResetService({
   query, insert, update, hashPassword,
@@ -1262,6 +1272,7 @@ function initializeDatabase() {
       )
     `);
     db.run('CREATE INDEX IF NOT EXISTS idx_delivery_proofs_company_created ON delivery_proofs(company_id, created_at DESC)');
+    if(driverAtomicQaEnabled) for(const ddl of driverAtomicQaSchema) db.run(ddl);
     db.run(`
       CREATE TABLE IF NOT EXISTS reorder_rules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5103,6 +5114,14 @@ app.post('/api/driver/deliveries/:id/proof-upload', requireRole(...mobileDriverR
       storageKey, contentType: isPng ? 'image/png' : 'image/jpeg',
       byteSize: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex')
     };
+    if(driverAtomicQaEnabled){
+      const verified=await insert(`INSERT INTO driver_qa_verified_proofs(
+        company_id,delivery_id,driver_id,kind,storage_key,sha256,content_type,byte_size)
+        VALUES(?,?,?,?,?,?,?,?)`,
+        [req.companyId,deliveryId,req.user.id,kind,metadata.storageKey,
+         metadata.sha256,metadata.contentType,metadata.byteSize]);
+      metadata.proofId=verified.id;
+    }
     res.status(201).json({ success: true, proof: metadata });
   } catch (error) {
     res.status(500).json({ message: 'Unable to store proof. Try again when connected.' });
@@ -5110,6 +5129,8 @@ app.post('/api/driver/deliveries/:id/proof-upload', requireRole(...mobileDriverR
 });
 
 app.post('/api/driver/deliveries/:id/action', requireRole(...mobileDriverRoles), async (req, res) => {
+  if(driverAtomicQaEnabled && req.body?.action==='deliver')
+    return atomicDriverDeliveryQaHandler(req,res);
   try {
     const deliveryId = Number(req.params.id);
     const action = String(req.body?.action || '');
