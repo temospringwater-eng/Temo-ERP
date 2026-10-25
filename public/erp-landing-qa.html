@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c2859">
+<meta name="description" content="TEMO AQUAFLOW connects water-business administration, delivery operations and customer workflows in one management platform.">
+<title>TEMO AQUAFLOW — Water Business ERP</title>
+<style>
+:root{color-scheme:light;--navy:#08244b;--deep:#0c3269;--blue:#165edf;--cyan:#e8f6ff;--ink:#132846;--muted:#5a6e87;--line:#dce8f6;--white:#fff;--surface:#f7fbff;--radius:20px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--white);color:var(--ink);line-height:1.6}
+a{color:inherit;text-decoration:none}
+a:focus-visible,summary:focus-visible{outline:3px solid #f5ae38;outline-offset:4px}
+.container{width:min(1150px,calc(100% - 48px));margin-inline:auto}
+.topbar{background:var(--navy);color:#d9eaff;font-size:12px;letter-spacing:.08em;text-align:center;padding:8px}
+header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;justify-content:space-between;min-height:76px;gap:22px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:850;letter-spacing:-.025em;color:var(--navy);white-space:nowrap}
+.mark{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:linear-gradient(145deg,#0b4cb6,#26b6ee);color:#fff;font-weight:900;font-size:23px;box-shadow:0 5px 16px #1567c633}
+.brand small{display:block;font-size:10px;line-height:1.4;letter-spacing:.18em;color:#4c779f;font-weight:750}
+.navlinks{display:flex;align-items:center;gap:25px;color:#4c627f;font-size:14px;font-weight:650}
+.navlinks a:hover{color:var(--blue)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:14px 22px;border-radius:12px;background:var(--blue);color:#fff;font-weight:750;font-size:14px;border:1px solid transparent;box-shadow:0 8px 20px #145cce30;transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 26px #145cce44}
+.btn-outline{background:#fff;color:var(--blue);border-color:#bbd1ef;box-shadow:none}
+.btn-small{padding:10px 17px}
+.hero{background:radial-gradient(ellipse at 82% 5%,#d7f4ff 0%,transparent 42%),linear-gradient(135deg,#f8fcff,#e9f4ff);border-bottom:1px solid #d8e7f6;overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:1.07fr .93fr;gap:54px;align-items:center;padding-block:88px 98px}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:8px 13px;border-radius:30px;background:#dceefd;color:#1e6099;font-size:12px;letter-spacing:.03em;font-weight:800}
+.dot{width:7px;height:7px;background:#179bce;border-radius:50%}
+h1{font-size:clamp(38px,4.2vw,63px);line-height:1.12;letter-spacing:-.05em;margin:23px 0 22px;color:#092d5f;font-weight:850}
+h1 span{color:var(--blue)}
+.lead{font-size:17px;line-height:1.85;color:#516983;margin:0 0 30px;max-width:570px}
+.actions{display:flex;gap:12px;flex-wrap:wrap}
+.assurance{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:35px;font-size:12px;color:#486785}
+.assurance span::before{content:"✓";color:#1083bd;font-weight:900;margin-right:7px}
+.preview-card{border:1px solid #bcd6ed;background:#fff;border-radius:24px;padding:15px;box-shadow:0 25px 65px #16447524;transform:rotate(1deg)}
+.browser-top{display:flex;gap:7px;align-items:center;height:39px;padding-left:12px;border-bottom:1px solid #e8eef7}
+.browser-top i{width:9px;height:9px;border-radius:50%;background:#c5d5e9}
+.browser-top i:first-child{background:#81cce4}
+.dashboard{display:grid;grid-template-columns:106px 1fr;min-height:315px}
+.dash-menu{background:#0b3061;color:#bdd9f8;padding:22px 11px;border-radius:0 0 0 10px;font-size:10px;font-weight:700;display:grid;align-content:start;gap:17px}
+.dash-menu strong{font-size:15px;letter-spacing:.02em;color:#fff;margin-bottom:9px}
+.dash-menu em{font-style:normal;padding:8px;background:#20528d;border-radius:7px;color:white}
+.dash-main{background:#fafcff;padding:23px 18px 30px}
+.dash-main h3{margin:0 0 4px;font-size:17px;color:var(--navy)}
+.dash-main p{margin:0;font-size:10px;color:#7185a1}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:23px}
+.metric{background:white;padding:13px 10px;border:1px solid #e2edf8;border-radius:12px}
+.metric small{display:block;color:#7690ab;font-size:9px}
+.metric b{display:block;color:var(--navy);font-size:18px;margin:7px 0 1px}
+.graph{margin-top:13px;background:#fff;border:1px solid #e5eef6;border-radius:12px;padding:13px 14px}
+.chart-bars{height:78px;display:flex;align-items:end;gap:8px;padding-top:8px}
+.chart-bars span{flex:1;min-height:9px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#56bdf3,#2069da)}
+.section{padding-block:86px}
+.center{text-align:center;max-width:690px;margin:0 auto 40px}
+.kicker{color:#1c6bc1;text-transform:uppercase;font-size:12px;font-weight:850;letter-spacing:.15em}
+h2{font-size:clamp(29px,3vw,41px);letter-spacing:-.038em;line-height:1.2;margin:12px 0 16px;color:var(--navy)}
+.section-subtitle{color:var(--muted);margin:0}
+.feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.feature{padding:28px 26px;border-radius:var(--radius);border:1px solid #e0ebf6;background:#fff;transition:transform .15s,box-shadow .15s}
+.feature:hover{transform:translateY(-3px);box-shadow:0 12px 27px #174b8112}
+.icon-square{width:44px;height:44px;border-radius:12px;background:#e8f3ff;display:grid;place-items:center;color:#1765d2;font-size:22px}
+.feature h3{font-size:17px;color:#12325d;margin:17px 0 7px;letter-spacing:-.02em}
+.feature p{font-size:14px;color:#61748d;margin:0;line-height:1.75}
+.soft{background:var(--surface)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
+.step{padding:28px;border:1px solid #dce9f7;border-radius:18px;background:#fff}
+.step span{display:grid;place-items:center;background:#dbedff;color:#1656b2;width:40px;height:40px;border-radius:50%;font-weight:850}
+.step h3{color:var(--navy);font-size:17px;margin:22px 0 8px}
+.step p{color:#60748a;font-size:14px;margin:0}
+.cta{background:linear-gradient(135deg,#082a58,#1459b1);color:white;border-radius:27px;padding:53px 62px;display:flex;justify-content:space-between;align-items:center;gap:28px}
+.cta h2{color:#fff;margin:0 0 10px}
+.cta p{color:#d5e9ff;margin:0}
+.cta .btn{background:#fff;color:#1557b9;flex-shrink:0}
+.faq{max-width:810px;margin:0 auto}
+details{border:1px solid #dce8f5;border-radius:14px;margin:12px 0;background:white;padding:18px 21px}
+summary{cursor:pointer;font-weight:750;color:#244569}
+details p{margin-bottom:0;color:#5e7288;font-size:14px}
+footer{margin-top:80px;background:#071e40;color:#b6cde6;padding:34px 0;font-size:13px}
+.foot{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}
+.foot a{color:#eff7ff}
+@media (max-width:900px){.hero-grid{gap:30px}.navlinks{gap:13px;font-size:12px}.navlinks a:nth-child(2){display:none}.feature-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:700px){.container{width:min(100% - 34px,540px)}.nav{min-height:68px}.navlinks{gap:10px}.navlinks a:not(.btn){display:none}.hero-grid{grid-template-columns:1fr;padding-block:58px 64px}.preview-card{transform:none;max-width:480px}h1{font-size:41px}.lead{font-size:15px}.section{padding-block:64px}.feature-grid,.steps{grid-template-columns:1fr}.cta{padding:33px 26px;display:block}.cta .btn{margin-top:24px}.nav .btn-small{padding:10px 12px}.metric b{font-size:16px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.feature,.btn{transition:none}.feature:hover,.btn:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="topbar">QA WEBSITE PREVIEW · NOT THE PRODUCTION ERP SITE</div>
+<header>
+  <div class="container nav">
+    <a class="brand" href="/erp-landing-qa.html" aria-label="TEMO AQUAFLOW website home"><span class="mark" aria-hidden="true">T</span><span>TEMO AQUAFLOW<small>WATER BUSINESS ERP</small></span></a>
+    <nav class="navlinks" aria-label="Primary navigation">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#faq">FAQs</a>
+      <a class="btn btn-small" href="/index.html">ERP Login</a>
+    </nav>
+  </div>
+</header>
+<main>
+<section class="hero" aria-labelledby="hero-title">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow"><span class="dot" aria-hidden="true"></span> WATER OPERATIONS, SIMPLIFIED</span>
+      <h1 id="hero-title">One platform.<br><span>Every delivery.</span><br>Better control.</h1>
+      <p class="lead">Connect customers, orders, payments, inventory and delivery teams through one secure, multi-company ERP workspace.</p>
+      <div class="actions">
+        <a class="btn" href="/index.html">Open ERP Login <span aria-hidden="true">↗</span></a>
+        <a class="btn btn-outline" href="#features">Explore Features</a>
+      </div>
+      <div class="assurance" aria-label="Platform priorities"><span>Driver-focused workflows</span><span>Multi-company access</span><span>Unified reporting</span></div>
+    </div>
+    <div class="preview-card" aria-label="Illustrative ERP dashboard design concept, not live data">
+      <div class="browser-top"><i></i><i></i><i></i></div>
+      <div class="dashboard">
+        <div class="dash-menu"><strong>T·ERP</strong><em>Overview</em><span>Orders</span><span>Deliveries</span><span>Customers</span><span>Inventory</span><span>Accounting</span></div>
+        <div class="dash-main">
+          <h3>Company Dashboard</h3><p>Illustrative interface — no actual business data</p>
+          <div class="metrics">
+            <div class="metric"><small>Orders</small><b>—</b></div>
+            <div class="metric"><small>Deliveries</small><b>—</b></div>
+            <div class="metric"><small>Receipts</small><b>—</b></div>
+          </div>
+          <div class="graph"><p>Operational overview</p><div class="chart-bars" aria-hidden="true"><span style="height:28%"></span><span style="height:43%"></span><span style="height:39%"></span><span style="height:64%"></span><span style="height:53%"></span><span style="height:82%"></span><span style="height:71%"></span><span style="height:95%"></span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section id="features" class="section">
+  <div class="container">
+    <div class="center"><div class="kicker">Built for water distribution</div><h2>One connected operating system</h2><p class="section-subtitle">Practical workflows for every part of your water business, without switching between disconnected spreadsheets and apps.</p></div>
+    <div class="feature-grid">
+      <article class="feature"><div class="icon-square" aria-hidden="true">▣</div><h3>Company Dashboard</h3><p>View orders, deliveries, finances and business performance with company-scoped access.</p></article>
+      <article class="feature"><div class="icon-square" aria-hidden="true">◈</div><h3>Sales & Customers</h3><p>Manage customer accounts, orders, recurring routes and collection records together.</p></article>
+      <article class="feature"><div class="icon-square" aria-hidden="true">◉</div><h3>Driver App</h3><p>Deliveries, signature confirmation, bottle returns and offline-friendly driver workflows.</p></article>
+      <article class="feature"><div class="icon-square" aria-hidden="true">▤</div><h3>Inventory & Bottles</h3><p>Track stock, product movement, returns and bottle custody from a central ledger.</p></article>
+      <article class="feature"><div class="icon-square" aria-hidden="true">▦</div><h3>Payments & Billing</h3><p>Monitor customer collections, invoices and subscription administration from one workspace.</p></article>
+      <article class="feature"><div class="icon-square" aria-hidden="true">◫</div><h3>Super Admin Controls</h3><p>Separate company access, permissions and subscription management from driver operations.</p></article>
+    </div>
+  </div>
+</section>
+<section id="how-it-works" class="section soft">
+  <div class="container">
+    <div class="center"><div class="kicker">How it works</div><h2>From order to delivery</h2><p class="section-subtitle">A single source of truth is the goal. Central API and database integration is currently undergoing QA.</p></div>
+    <div class="steps">
+      <article class="step"><span>01</span><h3>Receive an order</h3><p>Company Admin creates or manages a customer order inside TEMO ERP.</p></article>
+      <article class="step"><span>02</span><h3>Assign a driver</h3><p>The authorized driver sees only their assigned work in the native Driver App.</p></article>
+      <article class="step"><span>03</span><h3>Reconcile delivery</h3><p>Confirm signatures, payments, bottle returns and customer status through the central ledger.</p></article>
+    </div>
+  </div>
+</section>
+<section class="section">
+  <div class="container"><div class="cta"><div><h2>Ready to open your ERP workspace?</h2><p>Existing authorized users can continue to the ERP sign-in page. New company onboarding is not yet enabled.</p></div><a class="btn" href="/index.html">Go to ERP Login</a></div></div>
+</section>
+<section id="faq" class="section" style="padding-top:0">
+  <div class="container faq">
+    <div class="center"><div class="kicker">Questions</div><h2>About TEMO AQUAFLOW</h2></div>
+    <details><summary>Does the ERP support multiple companies?</summary><p>The central ERP is designed with separate companies and role-based access. Full Cloudflare D1 migration remains in testing.</p></details>
+    <details><summary>Does the Driver App work offline?</summary><p>Native offline workflows exist in QA. Final live offline-to-central-database synchronization must pass end-to-end testing before production.</p></details>
+    <details><summary>Can I create a new company account today?</summary><p>Public self-service signup and automated subscriptions are not yet live. Existing authorized users can use the ERP Login link.</p></details>
+  </div>
+</section>
+</main>
+<footer><div class="container foot"><span>© 2026 TEMO AQUAFLOW · TEMO Spring Water</span><span><a href="https://www.temospringwater.com/" rel="noopener noreferrer">TEMO Spring Water</a> · <a href="/index.html">ERP Login</a></span></div></footer>
+</body>
+</html>
