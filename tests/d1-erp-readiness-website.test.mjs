@@ -8,8 +8,15 @@ import {auditSchemaNames, inspectD1ReadOnly, SCREENSHOT_D1_APP_TABLES, CRITICAL_
 import {createD1DriverReadOnlyHandler} from '../services/d1-driver-readonly-worker-qa.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const sqlNamesFromRepo=()=>{
- const server=fs.readFileSync(path.join(root,'server.js'),'utf8');
- return [...new Set([...server.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+["']?([A-Za-z_]\w*)/gi)].map(x=>x[1]))];
+ const fixture=JSON.parse(fs.readFileSync(path.join(root,'tests','fixtures','erp-schema-table-names.json'),'utf8'));
+ assert.equal(fixture.expectedTableCount,116);
+ const serverPath=path.join(root,'server.js');
+ if(fs.existsSync(serverPath)){
+   const server=fs.readFileSync(serverPath,'utf8');
+   const fresh=[...new Set([...server.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+["']?([A-Za-z_]\w*)/gi)].map(x=>x[1]))].sort();
+   assert.deepEqual(fresh,fixture.tableNames,'ERP schema inventory fixture is stale');
+ }
+ return fixture.tableNames;
 };
 function syntheticD1(){
  const db=new DatabaseSync(':memory:');
