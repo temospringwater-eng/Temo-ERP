@@ -1,0 +1,23 @@
+name: TEMO ERP Driver Atomic Ledger QA
+on:
+  pull_request:
+    paths:
+      - 'services/driver-atomic-ledger-qa.js'
+      - 'tests/driver-atomic-ledger.test.cjs'
+      - '.github/workflows/driver-atomic-ledger-qa.yml'
+permissions:
+  contents: read
+jobs:
+  test-disposable-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check code syntax
+        run: |
+          node --check services/driver-atomic-ledger-qa.js
+          node --check tests/driver-atomic-ledger.test.cjs
+      - name: Run disposable SQLite tests
+        run: node --experimental-sqlite --test tests/driver-atomic-ledger.test.cjs
