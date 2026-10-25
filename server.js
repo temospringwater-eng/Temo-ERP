@@ -19,6 +19,8 @@ const { createDriverPasswordResetService } = require('./services/driver-password
 const { getSubscriptionStatus, accessError } = require('./services/subscription-service');
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
+const {driverPermissionsSchema,driverPermissionAuditTriggers,createDriverPermissionRoutes} = require('./services/driver-permissions-service');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
@@ -397,6 +399,8 @@ function initializeDatabase() {
         FOREIGN KEY (company_id) REFERENCES companies(id)
       )
     `);
+
+    db.run(driverPermissionsSchema);
 
     db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -1428,6 +1432,7 @@ function initializeDatabase() {
     db.run('CREATE INDEX IF NOT EXISTS idx_audit_logs_company_action ON audit_logs(company_id, action)');
     db.run('CREATE INDEX IF NOT EXISTS idx_audit_logs_company_entity ON audit_logs(company_id, entity_type)');
     db.run('CREATE INDEX IF NOT EXISTS idx_audit_logs_company_user ON audit_logs(company_id, user_id)');
+    for (const sql of driverPermissionAuditTriggers) db.run(sql);
     db.run(`CREATE TABLE IF NOT EXISTS report_definitions (
       id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, name TEXT NOT NULL,
       source TEXT NOT NULL, configuration TEXT NOT NULL DEFAULT '{}', created_by INTEGER,
@@ -2253,6 +2258,7 @@ app.use('/api', (req, res, next) => {
   });
 });
 
+createDriverPermissionRoutes({app,query,insert});
 aiAutomationService.registerRoutes(app, requireAuth, requireRole);
 whatsappAssistantService.registerRoutes(app, requireAuth, requireRole);
 platformOperationsService.registerRoutes(app, requireAuth, requireRole);

@@ -1,0 +1,32 @@
+name: TEMO ERP Driver Permissions Backend QA
+on:
+  pull_request:
+    paths:
+      - 'services/driver-permissions-service.js'
+      - 'server.js'
+      - 'tests/driver-permissions-backend.test.mjs'
+      - 'tests/driver-permissions-admin-ui.test.mjs'
+      - '.github/workflows/driver-backend-permissions-qa.yml'
+permissions:
+  contents: read
+jobs:
+  verify-driver-permissions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Native backend unit and isolated SQLite integration
+        run: node --experimental-sqlite --test tests/driver-permissions-backend.test.mjs
+      - name: Existing admin client mocked API integration
+        run: node --test tests/driver-permissions-admin-ui.test.mjs
+      - name: Full ERP server syntax and permission service syntax
+        run: |
+          node --check server.js
+          node --check services/driver-permissions-service.js
+      - name: No production deployment
+        run: |
+          test -f tests/driver-permissions-backend.test.mjs
+          ! grep -qE 'wrangler deploy|cloudflare deploy|npm start|pm2 restart' .github/workflows/driver-backend-permissions-qa.yml
