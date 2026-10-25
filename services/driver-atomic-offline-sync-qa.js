@@ -56,7 +56,7 @@ function createAtomicOfflineSyncHandler({sqlite3,dbPath,query,qaEnabled}){
     // Company OTP policy is read from trusted QA database, never the driver.
     const otpRequired=await readQaOtpRequired(query,companyId,true);
     if(otpRequired&&(!validId(payload.otpChallengeId)||
-       !/^\\d{6}$/.test(String(payload.otpCode||'')))){
+       !/^\d{6}$/.test(String(payload.otpCode||'')))){
       results.push(genericConflict(key,'customer_otp_required'));continue;
     }
 
