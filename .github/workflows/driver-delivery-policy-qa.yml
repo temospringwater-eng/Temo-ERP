@@ -1,0 +1,29 @@
+name: TEMO ERP Driver Delivery Policy QA
+on:
+  pull_request:
+    paths:
+      - 'server.js'
+      - 'services/driver-delivery-policy-service.js'
+      - 'tests/driver-delivery-policy-qa.test.mjs'
+      - '.github/workflows/driver-delivery-policy-qa.yml'
+permissions:
+  contents: read
+jobs:
+  conservative-driver-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Driver OTP/signature policy unit and HTTP route integration tests
+        run: node --test tests/driver-delivery-policy-qa.test.mjs
+      - name: Check source syntax and existing permissions regression
+        run: |
+          node --check server.js
+          node --check services/driver-delivery-policy-service.js
+          node --experimental-sqlite --test tests/driver-permissions-backend.test.mjs
+      - name: Confirm QA workflow contains no production activation
+        run: |
+          ! grep -qE 'wrangler deploy|cloudflare deploy|npm start|pm2 restart' .github/workflows/driver-delivery-policy-qa.yml
