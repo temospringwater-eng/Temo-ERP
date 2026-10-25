@@ -4,22 +4,22 @@ const assert=require('node:assert/strict');
 const {DatabaseSync}=require('node:sqlite');
 const crypto=require('node:crypto');
 const {createDriverCustomerOtpProvider}=require('../services/driver-customer-otp-provider');
-function setup({sendStatus='sent'}={}){
+function setup({sendStatus='sent',failUpdate=false,failAudit=false}={}){
  const db=new DatabaseSync(':memory:');
  db.exec(`CREATE TABLE customers(id INTEGER PRIMARY KEY,company_id INTEGER,email TEXT);
  CREATE TABLE orders(id INTEGER PRIMARY KEY,company_id INTEGER,customer_id INTEGER);
  CREATE TABLE deliveries(id INTEGER PRIMARY KEY,company_id INTEGER,order_id INTEGER,driver_id INTEGER,status TEXT);
  CREATE TABLE delivery_otp_challenges(id INTEGER PRIMARY KEY,company_id INTEGER,delivery_id INTEGER,customer_id INTEGER,
- code_hash TEXT,expires_at TEXT,created_by INTEGER,attempts INTEGER DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+ code_hash TEXT,expires_at TEXT,created_by INTEGER,attempts INTEGER DEFAULT 0,verified_at TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
  INSERT INTO customers VALUES(51,1,'client@example.net'),(52,2,'other@example.net');
  INSERT INTO orders VALUES(201,1,51),(202,2,52);
  INSERT INTO deliveries VALUES(301,1,201,11,'assigned'),(302,2,202,21,'assigned');`);
  const sent=[],audits=[];
  const query=async(sql,args=[])=>db.prepare(sql).all(...args);
  const insert=async(sql,args=[])=>({id:Number(db.prepare(sql).run(...args).lastInsertRowid)});
- const update=async(sql,args=[])=>({changes:Number(db.prepare(sql).run(...args).changes)});
+ const update=async(sql,args=[])=>{if(failUpdate)throw new Error('injected DB activation failure');return {changes:Number(db.prepare(sql).run(...args).changes)};};
  const sendEmail=async info=>{sent.push(info);return {status:sendStatus};};
- const writeAudit=async(...args)=>{audits.push(args);};
+ const writeAudit=async(...args)=>{if(failAudit)throw new Error('injected audit failure');audits.push(args);};
  const issue=createDriverCustomerOtpProvider({query,insert,update,sendEmail,writeAudit,randomCode:()=> '123456'});
  const call=options=>issue({companyId:1,deliveryId:301,driverId:11,actorId:11,req:{companyId:1,user:{id:11}},...options});
  return{db,sent,audits,call,issue,close:()=>db.close()};
@@ -93,4 +93,33 @@ test('TDD RED: absent provider never leaves usable OTP and audit does not claim 
   assert.equal(invalid.attempts,5,'SMTP failure must revoke OTP');
   assert.ok(new Date(invalid.expires_at.replace(' ','T')+'Z').getTime()<Date.now());
  assert.equal(f.audits.length,1,'only a request audit, not a successful send record');
+});
+
+test('fail-closed security: SMTP failure plus DB outage never exposes redeemable challenge',async t=>{
+ const f=setup({sendStatus:'failed',failUpdate:true});t.after(f.close);
+ await assert.rejects(f.call(),e=>e.status===503);
+ const saved=f.db.prepare('SELECT attempts,expires_at FROM delivery_otp_challenges').get();
+ assert.equal(saved.attempts,5);
+ assert.ok(Date.parse(saved.expires_at.replace(' ','T')+'Z')<Date.now());
+});
+test('fail-closed security: audit failure never sends OTP or activates challenge',async t=>{
+ const f=setup({failAudit:true,failUpdate:true});t.after(f.close);
+ await assert.rejects(f.call(),e=>e.status===503);
+ assert.equal(f.sent.length,0);
+ const saved=f.db.prepare('SELECT attempts,expires_at FROM delivery_otp_challenges').get();
+ assert.equal(saved.attempts,5);
+ assert.ok(Date.parse(saved.expires_at.replace(' ','T')+'Z')<Date.now());
+});
+test('fail-closed security: SMTP accepted but activation DB unavailable returns failure and locked OTP',async t=>{
+ const f=setup({sendStatus:'sent',failUpdate:true});t.after(f.close);
+ await assert.rejects(f.call(),e=>e.status===503);
+ assert.equal(f.sent.length,1);
+ assert.equal(f.db.prepare('SELECT attempts FROM delivery_otp_challenges').get().attempts,5);
+});
+test('SMTP success must explicitly activate exactly one challenge before response',async t=>{
+ const f=setup();t.after(f.close);
+ const result=await f.call();assert.equal(result.challengeId,1);
+ const saved=f.db.prepare('SELECT attempts,expires_at FROM delivery_otp_challenges').get();
+ assert.equal(saved.attempts,0);
+ assert.ok(Date.parse(saved.expires_at.replace(' ','T')+'Z')>Date.now());
 });
