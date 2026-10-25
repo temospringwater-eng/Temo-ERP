@@ -2279,7 +2279,7 @@ app.use('/api', (req, res, next) => {
 });
 
 createDriverPermissionRoutes({app,query,insert});
-createDriverDeliveryPolicyRoutes({app,query});
+createDriverDeliveryPolicyRoutes({app,query,update,qaEnabled:driverAtomicQaEnabled});
 aiAutomationService.registerRoutes(app, requireAuth, requireRole);
 whatsappAssistantService.registerRoutes(app, requireAuth, requireRole);
 platformOperationsService.registerRoutes(app, requireAuth, requireRole);
