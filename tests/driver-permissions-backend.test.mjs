@@ -10,14 +10,15 @@ function fixture(){
  const db=new DatabaseSync(':memory:');
  db.exec(`
   PRAGMA foreign_keys=ON;
-  CREATE TABLE companies(id INTEGER PRIMARY KEY,active INTEGER NOT NULL);
-  CREATE TABLE users(id INTEGER PRIMARY KEY,company_id INTEGER,role TEXT NOT NULL,active INTEGER NOT NULL);
+  CREATE TABLE companies(id INTEGER PRIMARY KEY,active INTEGER NOT NULL,status TEXT NOT NULL);
+  CREATE TABLE users(id INTEGER PRIMARY KEY,company_id INTEGER,role TEXT NOT NULL,active INTEGER NOT NULL,status TEXT NOT NULL);
   CREATE TABLE audit_logs(id INTEGER PRIMARY KEY,company_id INTEGER,user_id INTEGER,action TEXT,entity_type TEXT,entity_id INTEGER,
      previous_value TEXT,new_value TEXT);
-  INSERT INTO companies VALUES(1,1),(2,1),(3,0);
-  INSERT INTO users VALUES(11,1,'driver',1),(12,1,'delivery_driver',1),(13,1,'driver',0),
-    (21,2,'driver',1),(31,1,'company_admin',1),(32,2,'company_admin',1),(33,3,'company_admin',1),
-    (41,1,'staff',1),(99,NULL,'super_admin',1);
+  INSERT INTO companies VALUES(1,1,'active'),(2,1,'active'),(3,0,'inactive');
+  INSERT INTO users VALUES(11,1,'driver',1,'active'),(12,1,'delivery_driver',1,'active'),(13,1,'driver',0,'inactive'),
+    (14,1,'driver',1,'inactive'),(21,2,'driver',1,'active'),(31,1,'company_admin',1,'active'),
+    (32,2,'company_admin',1,'active'),(33,3,'company_admin',1,'active'),
+    (41,1,'staff',1,'active'),(99,NULL,'super_admin',1,'active');
  `);
  db.exec(driverPermissionsSchema);
  const query=async(sql,values=[])=>db.prepare(sql).all(...values);
@@ -37,6 +38,7 @@ function fixture(){
   driver:{id:11,company_id:1,role:'driver'},
   secondDriver:{id:12,company_id:1,role:'delivery_driver'},
   inactiveDriver:{id:13,company_id:1,role:'driver'},
+  revokedStatusDriver:{id:14,company_id:1,role:'driver'},
   otherDriver:{id:21,company_id:2,role:'driver'},
   admin:{id:31,company_id:1,role:'company_admin'},
   otherAdmin:{id:32,company_id:2,role:'company_admin'},
@@ -105,7 +107,7 @@ test('cross-tenant, inactive driver and unauthorized admin roles cannot read/upd
   const r=await f.request('PUT',admin,{actor,targetId:11,body:{permissions:{view_balance:true}}});
   assert.equal(r.status,403);
  }
- for(const id of [13,21,999]){
+ for(const id of [13,14,21,999]){
   assert.equal((await f.request('GET',admin,{actor:f.persons.admin,targetId:id})).status,404);
   assert.equal((await f.request('PUT',admin,{actor:f.persons.admin,targetId:id,body:{permissions:{view_balance:true}}})).status,404);
  }
