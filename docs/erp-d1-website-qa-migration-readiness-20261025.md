@@ -53,7 +53,7 @@ Do NOT run INSERT, UPDATE, DELETE, DROP, REPLACE, ALTER or CREATE on existing D1
 ## Testing
 
 - ERP TDD test: tests/d1-erp-readiness-website.test.mjs checks photographed names against the exact pinned schema inventory; synthetic D1 read-only schema queries and company/driver/customer read isolation; website accessibility/responsiveness and no hardcoded login values.
-- Cross-repo test runner: babor200 typo is NOT the repository; actual repository is babar200/TEMO-Driver-Android-QA Draft PR #26 (isolated, temporary QA-only test snapshots). Original ERP Actions minute budget is exhausted.
+- Cross-repo test runner: babar200/TEMO-Driver-Android-QA Draft PR #26 (isolated, temporary QA-only test snapshots). Original ERP Actions minute budget is exhausted.
 - Previous exact ERP OTP + atomic ledger + synthetic HTTP harness passed 31/31 tests under GitHub Actions run 40195368836; those tests do NOT validate live Cloudflare D1 migration or full Express startup.
 
 Official Cloudflare API references:
