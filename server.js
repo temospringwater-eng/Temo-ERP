@@ -21,6 +21,7 @@ const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = req
 
 const {driverPermissionsSchema,driverPermissionAuditTriggers,createDriverPermissionRoutes} = require('./services/driver-permissions-service');
 const {createDriverDeliveryPolicyRoutes} = require('./services/driver-delivery-policy-service');
+const {createDriverCustomerOtpProvider} = require('./services/driver-customer-otp-provider');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -242,6 +243,9 @@ aiAutomationService.initialize();
 const whatsappAssistantService = createWhatsAppAssistantService({ db, query, insert, update, writeAudit });
 whatsappAssistantService.initialize();
 const notificationDeliveryService = createNotificationDeliveryService({ query, insert, update });
+const issueCustomerDeliveryOtp = createDriverCustomerOtpProvider({
+  query,insert,writeAudit,sendEmail: params => notificationDeliveryService.sendEmail(params)
+});
 const driverPasswordResetService = createDriverPasswordResetService({
   query, insert, update, hashPassword,
   sendEmail: (opts) => notificationDeliveryService.sendEmail(opts)
@@ -5005,11 +5009,14 @@ function validateProofMetadata(value, fieldName) {
 }
 
 function otpHash(code) { return crypto.createHash('sha256').update(String(code)).digest('hex'); }
-async function createDeliveryOtp(req, delivery, includeCode = false) {
-  const code = String(crypto.randomInt(100000, 1000000));
-  const result = await insert('INSERT INTO delivery_otp_challenges (company_id, delivery_id, customer_id, code_hash, expires_at, created_by) SELECT ?, ?, o.customer_id, ?, datetime("now", "+10 minutes"), ? FROM orders o WHERE o.id = ? AND o.company_id = ?', [req.companyId, delivery.id, otpHash(code), req.user.id, delivery.order_id, req.companyId]);
-  await writeAudit(req, 'otp_requested', 'delivery', delivery.id, null, { challengeId: result.id });
-  return { challengeId: result.id, expiresInSeconds: 600, maskedDestination: 'customer contact', ...(includeCode ? { otpCode: code } : {}) };
+async function createDeliveryOtp(req, delivery, _includeCode = false) {
+  // Both driver and customer portals send the OTP only to the customer email.
+  // The _includeCode legacy argument is ignored: never return OTP in an API.
+  return issueCustomerDeliveryOtp({
+    companyId:req.companyId,deliveryId:delivery.id,actorId:req.user.id,req,
+    driverId:['driver','delivery_driver'].includes(req.user.role)?req.user.id:null,
+    customerId:req.user.role==='customer'?req.user.customer_id:null
+  });
 }
 async function verifyDeliveryOtp(req, delivery, challengeId, code) {
   const challenge = (await query('SELECT * FROM delivery_otp_challenges WHERE id = ? AND delivery_id = ? AND company_id = ? AND verified_at IS NULL', [Number(challengeId), delivery.id, req.companyId]))[0];
@@ -5051,7 +5058,7 @@ app.post('/api/driver/deliveries/:id/otp', requireRole(...mobileDriverRoles), as
     const delivery = (await query('SELECT * FROM deliveries WHERE id = ? AND company_id = ? AND driver_id = ?', [Number(req.params.id), req.companyId, req.user.id]))[0];
     if (!delivery) return res.status(404).json({ message: 'Assigned delivery not found.' });
     res.status(201).json(await createDeliveryOtp(req, delivery));
-  } catch (error) { res.status(400).json({ message: error.message }); }
+  } catch (error) { res.status(error.status || 503).json({ message: error.status ? error.message : 'Customer OTP delivery unavailable' }); }
 });
 
 app.post('/api/customer/deliveries/:id/otp', requireCustomer, async (req, res) => {
@@ -5059,7 +5066,7 @@ app.post('/api/customer/deliveries/:id/otp', requireCustomer, async (req, res) =
     const delivery = (await query('SELECT d.*, o.customer_id FROM deliveries d JOIN orders o ON o.id = d.order_id AND o.company_id = d.company_id WHERE d.id = ? AND d.company_id = ? AND o.customer_id = ?', [Number(req.params.id), req.companyId, req.user.customer_id]))[0];
     if (!delivery) return res.status(404).json({ message: 'Delivery not found.' });
     res.status(201).json(await createDeliveryOtp(req, delivery, true));
-  } catch (error) { res.status(400).json({ message: error.message }); }
+  } catch (error) { res.status(error.status || 503).json({ message: error.status ? error.message : 'Customer OTP delivery unavailable' }); }
 });
 
 app.get('/api/customer/deliveries/:id/proof', requireCustomer, async (req, res) => {
