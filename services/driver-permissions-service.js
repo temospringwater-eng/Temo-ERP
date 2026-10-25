@@ -36,6 +36,7 @@ function createDriverPermissionRoutes({app,query,insert,writeAudit}){
     const rows=await query(`
       SELECT u.id,u.role FROM users u JOIN companies c ON c.id=u.company_id
       WHERE u.id=? AND u.company_id=? AND u.active=1 AND c.active=1
+        AND u.status='active' AND c.status='active'
         AND u.role=?
     `,[Number(id),Number(companyId),req.user.role]);
     if(!rows.length)fail(403,'Company or account inactive');
@@ -46,6 +47,7 @@ function createDriverPermissionRoutes({app,query,insert,writeAudit}){
     const rows=await query(`
       SELECT u.id FROM users u JOIN companies c ON c.id=u.company_id
       WHERE u.id=? AND u.company_id=? AND u.active=1 AND c.active=1
+        AND u.status='active' AND c.status='active'
         AND u.role IN ('driver','delivery_driver')
     `,[Number(driverId),companyId]);
     if(!rows.length)fail(404,'Assigned company driver not found');
