@@ -41,3 +41,32 @@ No automatic production cutover: Node/Express/SQLite and D1 are different live s
 References:
 https://developers.cloudflare.com/d1/best-practices/import-export-data/
 https://developers.cloudflare.com/d1/reference/time-travel/
+
+
+## Authenticated read-only D1 inspection completed (25 Oct 2026)
+Actual accessible Cloudflare D1 database name: temo_erp_qa_db.
+The SQL console identified 11 application tables; Cloudflare internal _cf_KV was not counted as application data. The schema inspection queried definitions and PRAGMA metadata only, no private records.
+Schema-only observation (exact column-name lists, no row values) is pinned at tests/fixtures/live-d1-schema-20261025.json.
+
+Confirmed 116 ERP source declarations versus 11 D1 names:
+- 8 names overlap (companies, users, customers, orders, order_items, deliveries, payments, products).
+- 108 ERP table names are absent from the actual D1, including driver OTP, proof, audit and accounting supporting tables.
+- 3 D1-only names: inventory, bottle_returns, sync_queue.
+- All eight shared table names have confirmed differences relative to the original ERP base CREATE TABLE declarations. This is NOT the same as a complete comparison to the ERP after ALTER/index/service migrations.
+- D1 users has full_name/is_active; ERP native auth expects name/active. D1 deliveries has completed_at/status completed; ERP delivery uses delivered_at/status delivered. D1 payments has payment_method/status, ERP payments have different accounting fields. Field renaming alone cannot migrate historical records.
+- No user/customer rows or password hashes were queried; no row counts or data migration evidence exists.
+
+### Verified implementation fix (QA-only)
+services/d1-driver-readonly-worker-qa.mjs was changed from checking users.active=1 to checking the **actual D1** users.is_active=1, after performing schema guards and authoritative driver/company checks.
+tests/d1-erp-readiness-website.test.mjs now includes negative coverage that prevents a revoked driver from viewing the assignment. This endpoint is still UNMOUNTED and requires an externally authenticated driver identity resolver.
+
+### Verified independent GitHub Actions
+Cloudflare schema-only observation versus ERP base reconciliation:
+https://github.com/babar200/TEMO-Driver-Android-QA/actions/runs/40204814062 - 12/12 passing.
+After authenticated D1 observation and driver auth compatibility correction:
+https://github.com/babar200/TEMO-Driver-Android-QA/actions/runs/40205028380 - two suites, 12/12 plus 10/10 passing.
+https://github.com/babar200/TEMO-Driver-Android-QA/actions/runs/40205028377 - 10/10 passing.
+All are synthetic/extracted GitHub QA. There is still NO actual D1 write, no private records copied, no Cloudflare Worker deployment, no Android-to-live-ERP E2E, no signed-off full migration.
+
+### Migration hard stop
+DO NOT create the 108 missing tables blindly or rename populated D1 columns. First capture authenticated schema + FULL restorable protected backup, reconcile actual runtime ERP columns/constraints, map D1-only tables and avoid two competing payment/inventory ledgers. Rehearse migration, signed proof upload, delivery OTP/idempotency, FK/tenant isolation and rollback against a NEW disposable D1, and verify count/value reconciliation. Production deployment requires a separate reviewed cutover.
