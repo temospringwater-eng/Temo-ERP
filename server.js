@@ -24,6 +24,7 @@ const {createDriverDeliveryPolicyRoutes} = require('./services/driver-delivery-p
 const {createDriverCustomerOtpProvider} = require('./services/driver-customer-otp-provider');
 const {qaSchema: driverAtomicQaSchema} = require('./services/driver-atomic-ledger-qa');
 const {createAtomicDriverDeliveryHandler} = require('./services/driver-atomic-erp-bridge-qa');
+const {createAtomicOfflineSyncHandler} = require('./services/driver-atomic-offline-sync-qa');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -254,6 +255,9 @@ const issueCustomerDeliveryOtp = createDriverCustomerOtpProvider({
   query,insert,update,writeAudit,sendEmail: params => notificationDeliveryService.sendEmail(params)
 });
 const atomicDriverDeliveryQaHandler=createAtomicDriverDeliveryHandler({
+  sqlite3,dbPath,query,qaEnabled:driverAtomicQaEnabled
+});
+const atomicOfflineSyncQaHandler=createAtomicOfflineSyncHandler({
   sqlite3,dbPath,query,qaEnabled:driverAtomicQaEnabled
 });
 const driverPasswordResetService = createDriverPasswordResetService({
@@ -5262,6 +5266,8 @@ async function applyOfflineDriverOperation(req, operation, syncRecordId) {
 }
 
 app.post('/api/driver/offline-sync', requireRole(...mobileDriverRoles), async (req, res) => {
+  // QA-only atomic replay takes precedence; never mix non-atomic legacy ledger writes.
+  if(driverAtomicQaEnabled) return atomicOfflineSyncQaHandler(req,res);
   try {
     const operations = req.body?.operations;
     if (!Array.isArray(operations) || operations.length < 1 || operations.length > 100) return res.status(400).json({ message: 'operations must contain between 1 and 100 items.' });
