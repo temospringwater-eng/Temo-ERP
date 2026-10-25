@@ -16,6 +16,20 @@ const driverPermissionsSchema=`CREATE TABLE IF NOT EXISTS driver_permission_sett
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (company_id,driver_id)
 )`;
+// Audit is a SQLite trigger in the SAME statement/transaction as the grant.
+// An unavailable audit_logs table prevents the write rather than leaving an unaudited grant.
+const driverPermissionAuditTriggers=Object.freeze([
+ `CREATE TRIGGER IF NOT EXISTS driver_permission_settings_audit_insert
+   AFTER INSERT ON driver_permission_settings BEGIN
+   INSERT INTO audit_logs(company_id,user_id,action,entity_type,entity_id,previous_value,new_value)
+   VALUES(NEW.company_id,NEW.updated_by,'driver_permissions_update','user',NEW.driver_id,NULL,NEW.permissions_json);
+ END`,
+ `CREATE TRIGGER IF NOT EXISTS driver_permission_settings_audit_update
+   AFTER UPDATE ON driver_permission_settings BEGIN
+   INSERT INTO audit_logs(company_id,user_id,action,entity_type,entity_id,previous_value,new_value)
+   VALUES(NEW.company_id,NEW.updated_by,'driver_permissions_update','user',NEW.driver_id,OLD.permissions_json,NEW.permissions_json);
+ END`
+]);
 const validId=id=>Number.isSafeInteger(Number(id))&&Number(id)>0&&String(id??'').trim()!=='';
 const normalizePermissions=(source)=>Object.fromEntries(
   permissionKeys.map(k=>[k,source!=null && typeof source==='object' && source[k]===true])
@@ -23,8 +37,8 @@ const normalizePermissions=(source)=>Object.fromEntries(
 const failure=(status,message)=>Object.assign(new Error(message),{status});
 const fail=(status,message)=>{throw failure(status,message);};
 
-function createDriverPermissionRoutes({app,query,insert,writeAudit}){
-  if(!app||typeof query!=='function'||typeof insert!=='function'||typeof writeAudit!=='function')
+function createDriverPermissionRoutes({app,query,insert}){
+  if(!app||typeof query!=='function'||typeof insert!=='function')
     throw Error('Driver permission backend dependencies must be provided');
 
   async function actor(req,allowedRoles) {
@@ -90,6 +104,9 @@ function createDriverPermissionRoutes({app,query,insert,writeAudit}){
       fail(400,'Only approved Boolean driver permissions are allowed');
     const previous=await readPermissions(caller.companyId,driverId);
     const merged=normalizePermissions({...previous,...patch});
+    // Repeating an already-effective grant does not need another audit entry.
+    if(permissionKeys.every(key=>previous[key]===merged[key]))
+      return {driverId,permissions:previous};
     await insert(`
       INSERT INTO driver_permission_settings(company_id,driver_id,permissions_json,updated_by)
       VALUES(?,?,?,?)
@@ -97,7 +114,6 @@ function createDriverPermissionRoutes({app,query,insert,writeAudit}){
         permissions_json=excluded.permissions_json,
         updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP
     `,[caller.companyId,driverId,JSON.stringify(merged),caller.id]);
-    await writeAudit(req,'driver_permissions_update','user',driverId,previous,merged);
     return {driverId,permissions:await readPermissions(caller.companyId,driverId)};
   }
   function endpoint(fn){
@@ -116,4 +132,4 @@ function createDriverPermissionRoutes({app,query,insert,writeAudit}){
   return {driverRead,adminRead,adminUpdate};
 }
 
-module.exports={permissionKeys,normalizePermissions,driverPermissionsSchema,createDriverPermissionRoutes};
+module.exports={permissionKeys,normalizePermissions,driverPermissionsSchema,driverPermissionAuditTriggers,createDriverPermissionRoutes};
