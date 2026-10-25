@@ -231,6 +231,55 @@ function createDriverFieldOpsQa({app,sqlite3,dbPath,query,qaEnabled=false}){
    return {success:true,driverId:id,productId:product,returnedQuantity:qty,companyId:a.companyId};
   },id);
  }));
+
+ // Real route scheduling is Company Admin-owned. Preserve sequence and tenant.
+ app.post('/api/admin/driver/field/routes/schedule',response(async req=>{
+  const a=await actor(req,true),p=req.body||{};
+  const driverId=Number(p.driverId),ids=p.deliveryIds;
+  if(!validId(driverId)||!text(p.routeDate,10)||!/^\d{4}-\d{2}-\d{2}$/.test(p.routeDate)||
+     !Array.isArray(ids)||ids.length<1||ids.length>50||ids.some(x=>!validId(x))||
+     new Set(ids.map(Number)).size!==ids.length)
+    throw bad(400,'Driver, date and 1-50 unique assigned deliveries required');
+  return receipt(a,'route-schedule',p,async tx=>{
+   const u=await tx.get("SELECT id FROM users WHERE company_id=? AND id=? AND active=1 AND role IN ('driver','delivery_driver')",a.companyId,driverId);
+   if(!u)throw bad(404,'Driver not in company');
+   for(const id of ids){
+    const d=await tx.get("SELECT id FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND status IN ('assigned','out_for_delivery')",Number(id),a.companyId,driverId);
+    if(!d)throw bad(409,'Delivery missing, already complete or assigned elsewhere');
+    const old=await tx.get("SELECT s.id FROM delivery_route_stops s JOIN delivery_routes r ON r.id=s.route_id AND r.company_id=s.company_id WHERE s.company_id=? AND s.delivery_id=? AND r.status NOT IN ('completed','cancelled')",a.companyId,Number(id));
+    if(old)throw bad(409,'Delivery already scheduled on active route');
+   }
+   const route=await tx.run("INSERT INTO delivery_routes(company_id,name,area,driver_id,route_date,status,created_by) VALUES(?,?,?,?,?,'assigned',?)",
+    a.companyId,String(p.name||'Assigned Route').slice(0,80),'',driverId,p.routeDate,a.driverId);
+   let sequence=0;
+   for(const id of ids)await tx.run("INSERT INTO delivery_route_stops(company_id,route_id,delivery_id,sequence,status) VALUES(?,?,?,?,'pending')",
+     a.companyId,route.lastID,Number(id),++sequence);
+   return {success:true,routeId:route.lastID,driverId,stops:sequence,routeDate:p.routeDate,companyId:a.companyId};
+  },driverId);
+ }));
+ // Returns are received by Admin and automatically reconcile both van stock
+ // and the main product stock within one transaction.
+ app.post('/api/admin/driver/field/van-stock/return',response(async req=>{
+  const a=await actor(req,true),p=req.body||{};
+  const driverId=Number(p.driverId),productId=Number(p.productId),quantity=Number(p.quantity);
+  if(!validId(driverId)||!validId(productId)||!validId(quantity)||quantity>10000)
+    throw bad(400,'Driver, product and return quantity required');
+  return receipt(a,'van-return',p,async tx=>{
+   const u=await tx.get("SELECT id FROM users WHERE company_id=? AND id=? AND active=1 AND role IN ('driver','delivery_driver')",a.companyId,driverId);
+   if(!u)throw bad(404,'Driver not in company');
+   const stock=await tx.get("SELECT COALESCE(SUM(quantity),0) AS balance FROM driver_field_van_movements WHERE company_id=? AND driver_id=? AND product_id=?",
+      a.companyId,driverId,productId);
+   if(!stock||stock.balance<quantity)throw bad(409,'Van does not have sufficient stock');
+   const product=await tx.run('UPDATE products SET stock=stock+? WHERE id=? AND company_id=?',
+     quantity,productId,a.companyId);
+   if(product.changes!==1)throw bad(409,'Product not found in company');
+   await tx.run("INSERT INTO driver_field_van_movements(company_id,driver_id,product_id,quantity,movement_type,idempotency_key,created_by) VALUES(?,?,?,?,'return',?,?)",
+     a.companyId,driverId,productId,-quantity,p.idempotencyKey,a.driverId);
+   await tx.run("INSERT INTO stock_movements(company_id,warehouse_id,product_id,movement_type,quantity,reference,created_by) VALUES(?,NULL,?,'van_return',?,?,?)",
+     a.companyId,productId,quantity,p.idempotencyKey,a.driverId);
+   return {success:true,driverId,productId,returnedQuantity:quantity,companyId:a.companyId};
+  },driverId);
+ }));
  return {enabled:qaEnabled};
 }
 module.exports={createDriverFieldOpsQa};
