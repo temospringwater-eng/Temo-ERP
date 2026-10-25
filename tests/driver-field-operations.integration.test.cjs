@@ -6,7 +6,7 @@ const {createDriverFieldOpsQa}=require('../services/driver-field-operations-qa')
 class SQLite3Compat {
  static OPEN_READWRITE=1;
  constructor(name,mode,callback){
-  try{this.db=new DatabaseSync(name);callback(null);}catch(e){callback(e);}
+  try{this.db=new DatabaseSync(name);queueMicrotask(()=>callback(null));}catch(e){queueMicrotask(()=>callback(e));}
  }
  exec(sql,callback){try{this.db.exec(sql);callback(null);}catch(e){callback(e);}}
  get(sql,args,callback){try{callback(null,this.db.prepare(sql).get(...args));}catch(e){callback(e);}}
@@ -70,7 +70,7 @@ function fixture(){
 const api='/api/driver/field';
 test('all six modules are denied when no Company Admin permission exists',async t=>{
  const f=fixture();t.after(f.close);
- for(const route of ['/products','/customers/501/ledger','/zones','/van-stock'])
+ for(const route of ['/products','/customers/:id/ledger','/zones','/van-stock'])
   assert.equal((await f.make('get',api+route,{params:{id:'501'}})).code,403,route);
  assert.equal((await f.make('post',api+'/customers',{body:{idempotencyKey:'test-customer-1',name:'Test',phone:'123',address:'Test'}})).code,403);
  assert.equal(f.count('customers'),3);
