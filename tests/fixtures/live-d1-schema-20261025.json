@@ -1,0 +1,191 @@
+{
+  "source": "Authenticated Cloudflare D1 read-only SQL-console schema inspection, 2026-10-25",
+  "database": "temo_erp_qa_db",
+  "schemaOnly": true,
+  "containsCustomerRecords": false,
+  "systemObjects": [
+    "_cf_KV"
+  ],
+  "tables": {
+    "companies": {
+      "columns": [
+        "id",
+        "name",
+        "code",
+        "address",
+        "phone",
+        "email",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ],
+      "unique": [
+        "code"
+      ],
+      "statusField": "is_active"
+    },
+    "users": {
+      "columns": [
+        "id",
+        "company_id",
+        "username",
+        "password_hash",
+        "full_name",
+        "phone",
+        "email",
+        "role",
+        "is_active",
+        "can_create_customer",
+        "created_at",
+        "updated_at"
+      ],
+      "unique": [
+        "username"
+      ],
+      "statusField": "is_active"
+    },
+    "customers": {
+      "columns": [
+        "id",
+        "company_id",
+        "name",
+        "phone",
+        "address",
+        "email",
+        "is_active",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "orders": {
+      "columns": [
+        "id",
+        "company_id",
+        "customer_id",
+        "driver_id",
+        "order_number",
+        "status",
+        "total_amount",
+        "notes",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "order_items": {
+      "columns": [
+        "id",
+        "order_id",
+        "product_id",
+        "quantity",
+        "unit_price",
+        "subtotal",
+        "created_at"
+      ]
+    },
+    "deliveries": {
+      "columns": [
+        "id",
+        "company_id",
+        "order_id",
+        "driver_id",
+        "status",
+        "delivery_date",
+        "notes",
+        "completed_at",
+        "created_at",
+        "updated_at"
+      ],
+      "statusValues": [
+        "pending",
+        "in_progress",
+        "completed",
+        "failed"
+      ],
+      "statusCheck": true
+    },
+    "payments": {
+      "columns": [
+        "id",
+        "company_id",
+        "order_id",
+        "delivery_id",
+        "driver_id",
+        "amount",
+        "payment_method",
+        "status",
+        "notes",
+        "created_at"
+      ],
+      "methods": [
+        "cash",
+        "card",
+        "transfer",
+        "other"
+      ],
+      "statusValues": [
+        "pending",
+        "completed",
+        "failed"
+      ]
+    },
+    "products": {
+      "columns": [
+        "id",
+        "company_id",
+        "name",
+        "sku",
+        "unit_price",
+        "bottle_type",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "inventory": {
+      "columns": [
+        "id",
+        "company_id",
+        "product_id",
+        "quantity",
+        "updated_at"
+      ]
+    },
+    "bottle_returns": {
+      "columns": [
+        "id",
+        "company_id",
+        "delivery_id",
+        "customer_id",
+        "product_id",
+        "quantity",
+        "notes",
+        "created_at"
+      ]
+    },
+    "sync_queue": {
+      "columns": [
+        "id",
+        "company_id",
+        "driver_id",
+        "operation_type",
+        "entity_type",
+        "entity_data",
+        "status",
+        "created_at",
+        "synced_at"
+      ],
+      "statusValues": [
+        "pending",
+        "synced",
+        "failed"
+      ]
+    }
+  },
+  "limitations": [
+    "Column and key summary from SQL console; runtime application data not queried",
+    "Default values and foreign-key actions not exhaustively machine-verified in this fixture",
+    "Not proof of compatibility with full ERP runtime after ALTER and service migrations"
+  ]
+}
