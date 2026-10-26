@@ -131,7 +131,9 @@ test('Van stock: admin-owned atomic ERP inventory transfer, retry does not doubl
 
 test('Company Admin schedules assigned driver route with ordered stops; no duplicates or foreign deliveries',async t=>{
  const f=fixture();t.after(f.close);
- const data={driverId:3,routeDate:'2026-10-25',deliveryIds:[71],name:'QA route',idempotencyKey:'route-schedule-001'};
+ const assigned=await f.call('POST','/api/admin/driver/field/zones/assign',{user:f.admin,body:{driverId:3,zoneId:81}});
+ assert.equal(assigned.code,200,JSON.stringify(assigned.data));
+ const data={driverId:3,zoneId:81,routeDate:'2026-10-25',deliveryIds:[71],name:'QA route',idempotencyKey:'route-schedule-001'};
  const first=await f.call('POST','/api/admin/driver/field/routes/schedule',{user:f.admin,body:data});
  assert.equal(first.code,200,JSON.stringify(first.data));assert.equal(first.data.stops,1);
  assert.equal(f.count('delivery_routes'),3);assert.equal(f.count('delivery_route_stops'),2);
