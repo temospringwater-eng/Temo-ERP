@@ -20,6 +20,7 @@ test('TDD: owning CI executes independent SQLite driver field integration and so
 });
 
 test('TDD: ERP CI must prove disposable SQLite backup/restore without live-data access before release',()=>{
- assert.match(yaml,/node --test tests\\/sqlite-restore-drill\\.test\\.cjs/,'Require isolated backup and restore drill in ERP CI');
- assert.doesNotMatch(yaml,/--source\\s+[^\\n]*hayrila\\.db/,'CI must never restore or access a tracked production-like ERP DB');
+ assert.ok(yaml.includes('node --test tests/sqlite-restore-drill.test.cjs'),
+  'Require isolated backup and restore drill in ERP CI');
+ assert.ok(!yaml.includes('hayrila.db'),'CI must never read a tracked production-like ERP database');
 });
