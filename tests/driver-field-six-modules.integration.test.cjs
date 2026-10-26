@@ -131,7 +131,9 @@ test('Van stock: admin-owned atomic ERP inventory transfer, retry does not doubl
 
 test('Company Admin schedules assigned driver route with ordered stops; no duplicates or foreign deliveries',async t=>{
  const f=fixture();t.after(f.close);
- const data={driverId:3,routeDate:'2026-10-25',deliveryIds:[71],name:'QA route',idempotencyKey:'route-schedule-001'};
+ const assigned=await f.call('POST','/api/admin/driver/field/zones/assign',{user:f.admin,body:{driverId:3,zoneId:81}});
+ assert.equal(assigned.code,200,JSON.stringify(assigned.data));
+ const data={driverId:3,zoneId:81,routeDate:'2026-10-25',deliveryIds:[71],name:'QA route',idempotencyKey:'route-schedule-001'};
  const first=await f.call('POST','/api/admin/driver/field/routes/schedule',{user:f.admin,body:data});
  assert.equal(first.code,200,JSON.stringify(first.data));assert.equal(first.data.stops,1);
  assert.equal(f.count('delivery_routes'),3);assert.equal(f.count('delivery_route_stops'),2);
@@ -155,4 +157,42 @@ test('Admin van returns are atomic, cannot return beyond driver balance, retry i
  assert.equal((await f.call('GET','/api/driver/field/van-stock')).data.items[0].quantity,5);
  const tooMuch=await f.call('POST','/api/admin/driver/field/van-stock/return',{user:f.admin,body:{...back,idempotencyKey:'return-too-much',quantity:15}});
  assert.equal(tooMuch.code,409);assert.equal(f.count('driver_field_van_movements'),2);
+});
+
+
+test('TDD driver read API: permissions are own-driver, admin granted, all other flags deny-by-default',async t=>{
+ const f=fixture();t.after(f.close);
+ const route='/api/driver/permissions';
+ const initial=await f.call('GET',route);
+ assert.equal(initial.code,200,JSON.stringify(initial.data));
+ assert.equal(initial.data.driverId,3);
+ assert.equal(initial.data.permissions.create_customer,false);
+ assert.equal(initial.data.permissions.view_customer_ledger,false);
+ assert.equal(initial.data.permissions.change_price,false);
+ await f.grant('create_customer');
+ const granted=await f.call('GET',route);
+ assert.equal(granted.data.permissions.create_customer,true);
+ assert.equal(granted.data.permissions.change_price,false);
+ assert.equal((await f.call('GET',route,{user:f.admin})).code,403);
+ assert.equal((await f.call('GET',route,{user:{id:12,role:'driver'},companyId:1})).code,403);
+ assert.equal((await f.call('GET',route,{user:{id:3,role:'driver'},companyId:2})).code,403);
+});
+test('TDD driver delivery policy: server defaults OTP ON and cannot be bypassed by driver',async t=>{
+ const f=fixture();t.after(f.close);
+ const route='/api/driver/delivery-policy';
+ const result=await f.call('GET',route);
+ assert.equal(result.code,200,JSON.stringify(result.data));
+ assert.equal(result.data.otpRequired,true);
+ assert.equal((await f.call('GET',route,{user:f.admin})).code,403);
+ assert.equal((await f.call('GET',route,{user:{id:3,role:'driver'},companyId:2})).code,403);
+});
+test('TDD driver bottle types: company-scoped minimal product list without pricing or foreign inventory',async t=>{
+ const f=fixture();t.after(f.close);
+ const route='/api/driver/bottle-types';
+ const result=await f.call('GET',route);
+ assert.equal(result.code,200,JSON.stringify(result.data));
+ assert.deepEqual(result.data.items.map(p=>p.id),[51]);
+ assert.equal(result.data.items[0].name,'19L');
+ assert.equal(Object.hasOwn(result.data.items[0],'sale_price'),false);
+ assert.equal((await f.call('GET',route,{user:f.admin})).code,403);
 });

@@ -54,23 +54,28 @@ app.use((req, res, next) => {
     }
   });
 
-  app.post('/api/me/password', async (req, res) => {
+  next();
+});
+
+app.post('/api/me/password', requireAuth, async (req, res) => {
     try {
       const currentPassword = String(req.body?.currentPassword || '');
       const newPassword = String(req.body?.newPassword || '');
       const confirmPassword = String(req.body?.confirmPassword || '');
-      const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
+      const scopedSql = req.user.role === 'super_admin' ? 'id = ? AND company_id IS NULL' : 'id = ? AND company_id = ?';
+      const scopedParams = req.user.role === 'super_admin' ? [req.user.id] : [req.user.id, req.companyId];
+      const user = (await query('SELECT password_hash FROM users WHERE ' + scopedSql, scopedParams))[0];
       if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
       if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
-      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
+      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE ' + scopedSql,
+        [hashPassword(newPassword), ...scopedParams]);
       await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
       res.json({ success: true, mustChangePassword: false });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Unable to change password.' });
     }
   });
-  next();
-});
+
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -1923,8 +1928,10 @@ function initializeDatabase() {
       WHERE NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.company_id = p.company_id AND sm.reference = 'PURCHASE-' || p.id AND sm.product_id = pi.product_id)
     `);
 
+    if (process.env.NODE_ENV !== 'production') {
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
+    }
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
       if (err) return console.error('Seed check failed:', err.message);
@@ -2442,7 +2449,7 @@ app.post('/api/customers/:id/portal-access', requireRole(...customerPortalRoles)
     const customerId = Number(req.params.id); const customer = (await query('SELECT * FROM customers WHERE id = ? AND company_id = ?', [customerId, req.companyId]))[0];
     const email = String(req.body?.email || customer?.email || '').trim().toLowerCase(); const password = String(req.body?.password || '');
     if (!customer) return res.status(404).json({ message: 'Customer not found.' });
-    if (!/^\\S+@\\S+\\.\\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return res.status(400).json({ message: 'A valid email and password of at least 8 characters are required.' });
     const username = `customer_${customerId}`; const existing = (await query('SELECT id FROM users WHERE (LOWER(email) = ? OR username = ?) AND id != COALESCE(?, -1)', [email, username, null]))[0];
     if (existing) return res.status(409).json({ message: 'That email or customer portal username is already in use.' });
     const linked = (await query('SELECT id FROM users WHERE customer_id = ? AND company_id = ?', [customerId, req.companyId]))[0];
@@ -3415,8 +3422,8 @@ app.post('/api/companies/:id/users', async (req, res) => {
     }
     const { username, email, password, name, role = 'staff' } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (!username || !password || !name || !allowedRoles.includes(role)) {
       return res.status(400).json({ message: 'Name, username, password and a valid role are required.' });
     }
@@ -3452,8 +3459,8 @@ app.patch('/api/users/:id', async (req, res) => {
     }
     const { name, email, phone, role, active, status, password, mustChangePassword } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (role && !allowedRoles.includes(role)) return res.status(400).json({ message: 'Invalid user role.' });
     if (status && !['active', 'inactive', 'suspended', 'archived'].includes(String(status).toLowerCase())) return res.status(400).json({ message: 'Invalid user status.' });
     const existing = (await query('SELECT * FROM users WHERE id = ?', [userId]))[0];
@@ -4910,7 +4917,7 @@ async function verifyDeliveryOtp(req, delivery, challengeId, code) {
   const challenge = (await query('SELECT * FROM delivery_otp_challenges WHERE id = ? AND delivery_id = ? AND company_id = ? AND verified_at IS NULL', [Number(challengeId), delivery.id, req.companyId]))[0];
   if (!challenge || new Date(challenge.expires_at).getTime() < Date.now() || challenge.attempts >= 5) return false;
   await update('UPDATE delivery_otp_challenges SET attempts = attempts + 1 WHERE id = ?', [challenge.id]);
-  if (!/^\\d{6}$/.test(String(code || '')) || otpHash(code) !== challenge.code_hash) return false;
+  if (!/^\d{6}$/.test(String(code || '')) || otpHash(code) !== challenge.code_hash) return false;
   await update('UPDATE delivery_otp_challenges SET verified_at = CURRENT_TIMESTAMP WHERE id = ?', [challenge.id]);
   req.verifiedOtp = challenge;
   return true;
@@ -6634,4 +6641,55 @@ function startServer(port) {
   });
 }
 
-startServer(PORT);
+
+/**
+ * Production must never expose a predictable Super Admin or Company Admin password.
+ * Safe migration: only missing accounts are created, and ONLY known legacy default
+ * credentials are rotated. Existing non-default passwords remain unchanged.
+ */
+async function enforceProductionBootstrapCredentials() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const strong = (value, name) => {
+    if (value === undefined || value === '') return null;
+    if (typeof value !== 'string' || value.length < 16 ||
+        ['admin123', 'password', 'changeme', 'admin1234567890123'].includes(value.toLowerCase()))
+      throw new Error(name + ' must contain at least 16 characters and cannot be a default password');
+    return value;
+  };
+  const superPass = strong(process.env.TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD, 'Super Admin bootstrap password');
+  const adminPass = strong(process.env.TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD, 'Company Admin bootstrap password');
+  const admins = await query("SELECT id,username,password_hash FROM users WHERE username IN ('superadmin','admin')");
+  const superAdmin = admins.find(row => row.username === 'superadmin');
+  const companyAdmin = admins.find(row => row.username === 'admin');
+  if ((!superAdmin || verifyPassword('admin123', superAdmin.password_hash)) && !superPass)
+    throw new Error('Super Admin is not provisioned with strong production credentials');
+  if ((!companyAdmin || verifyPassword('admin123', companyAdmin.password_hash)) && !adminPass)
+    throw new Error('Company Admin is not provisioned with strong production credentials');
+
+  if (!superAdmin) {
+    await insert("INSERT INTO users (company_id,username,password_hash,name,role) VALUES (NULL,'superadmin',?,'Platform Owner','super_admin')", [hashPassword(superPass)]);
+  } else if (verifyPassword('admin123', superAdmin.password_hash)) {
+    await update("UPDATE users SET password_hash=? WHERE id=? AND username='superadmin' AND role='super_admin'",
+      [hashPassword(superPass),superAdmin.id]);
+  }
+  if (!companyAdmin) {
+    const companies = await query('SELECT id FROM companies ORDER BY id LIMIT 1');
+    if (!companies.length) throw new Error('Company Admin cannot be provisioned without a company');
+    await insert("INSERT INTO users (company_id,username,password_hash,name,role) VALUES (?,'admin',?,'Company Admin','company_admin')",
+      [companies[0].id,hashPassword(adminPass)]);
+  } else if (verifyPassword('admin123', companyAdmin.password_hash)) {
+    await update("UPDATE users SET password_hash=? WHERE id=? AND username='admin' AND role='company_admin'",
+      [hashPassword(adminPass),companyAdmin.id]);
+  }
+  // Revocation ensures stale sessions cannot persist across a legacy-password rotation.
+  await update("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username IN ('superadmin','admin')) AND expires_at < datetime('now')");
+}
+
+(async () => {
+  await enforceProductionBootstrapCredentials();
+  startServer(PORT);
+})().catch(error => {
+  console.error('ERP secure startup refused:', error.message);
+  process.exitCode = 1;
+  db.close(() => process.exit(1));
+});

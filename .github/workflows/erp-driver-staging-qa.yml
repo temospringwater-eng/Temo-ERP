@@ -1,0 +1,42 @@
+name: TEMO ERP Recovery and Driver Field QA
+on:
+  pull_request:
+    paths:
+      - "server.js"
+      - "services/**"
+      - "public/**"
+      - "tests/**"
+      - "migrations/**"
+      - "package*.json"
+      - ".github/workflows/erp-driver-staging-qa.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  recovered-source-and-full-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NODE_ENV: test
+      TEMO_DRIVER_FIELD_OPS_QA: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Verify recovered JavaScript and install locked dependencies
+        run: |
+          node --check server.js
+          npm ci --no-audit --no-fund
+      - name: TDD owning CI guard, recovered sources and frontend integrity
+        run: node --test tests/ci-pipeline-guard.test.cjs tests/source-integrity.test.cjs
+      - name: Production bootstrap fail-closed security regression
+        run: timeout -k 5s 100s node --test --test-force-exit tests/bootstrap-security.test.js
+      - name: Complete ERP unit and service integration regression
+        run: timeout -k 5s 230s node --test --test-force-exit --test-concurrency=1 --test-timeout=90000 tests/*.test.js
+      - name: Disposable SQLite driver field integration with atomic ledger tests
+        run: timeout -k 5s 100s node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs
