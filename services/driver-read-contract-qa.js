@@ -1,4 +1,5 @@
 'use strict';
+const {isProofV2Qa,deliveryProofPolicy,ensureNoLegacyDeliveryOtp,assertProofV2BridgeOnly}=require('./delivery-proof-v2-retirement-qa');
 
 // Central Express/SQLite driver-read contract adapter: ISOLATED QA ONLY.
 // Main ERP server registers this only on an explicitly opted-in disposable qa.db,
@@ -82,8 +83,44 @@ function createDriverReadContractQa({ app, query, qaEnabled = false }) {
   }));
 
   app.get('/api/driver/delivery-policy', auth, (req, res) =>
-    response(res, 200, { otpRequired: true, source: 'qa-fail-closed' })
+    response(res, 200, deliveryProofPolicy(process.env,process.env.DB_PATH))
   );
+  // QA proof-v2 retirement: intercept old financial routes BEFORE server.js
+  // legacy OTP actions. No production DB, no live finance changes here.
+  if(isProofV2Qa(process.env,process.env.DB_PATH)){
+    app.post('/api/driver/deliveries/:id/otp',auth,handle(async (req,res)=>{
+      const record=await query('SELECT id FROM deliveries WHERE id=? AND company_id=? AND driver_id=?',
+       [Number(req.params.id),req.qaDriverActor.companyId,req.qaDriverActor.userId]);
+      if(record.length!==1)return response(res,404,{error:'Assigned delivery not found'});
+      const retired=ensureNoLegacyDeliveryOtp(process.env,process.env.DB_PATH);
+      return response(res,retired.status,{error:retired.message});
+    }));
+    app.post('/api/customer/deliveries/:id/otp',handle(async (req,res)=>{
+      if(req.user?.role!=='customer'||!Number.isSafeInteger(Number(req.user.customer_id))||
+         !Number.isSafeInteger(Number(req.companyId)))return response(res,401,{error:'Customer login required'});
+      const record=await query('SELECT d.id FROM deliveries d JOIN orders o ON o.id=d.order_id AND o.company_id=d.company_id WHERE d.id=? AND d.company_id=? AND o.customer_id=?',
+       [Number(req.params.id),Number(req.companyId),Number(req.user.customer_id)]);
+      if(record.length!==1)return response(res,404,{error:'Assigned customer delivery not found'});
+      const retired=ensureNoLegacyDeliveryOtp(process.env,process.env.DB_PATH);
+      return response(res,retired.status,{error:retired.message});
+    }));
+    app.post('/api/driver/deliveries/:id/action',auth,(req,res,next)=>{
+      if(req.body?.action!=='deliver')return next();
+      try{assertProofV2BridgeOnly(req.body,process.env,process.env.DB_PATH);}
+      catch(error){return response(res,error.status||409,{code:error.code||'proof_v2_bridge_required',error:error.message});}
+      return response(res,409,{error:'Signed proof-v2 bridge required'});
+    });
+    app.post('/api/driver/offline-sync',auth,(req,res,next)=>{
+      const operations=req.body?.operations;
+      if(!Array.isArray(operations))return response(res,400,{error:'Offline operations array required'});
+      for(const operation of operations){
+        if(operation?.operationType!=='deliver'&&operation?.action!=='deliver')continue;
+        try{assertProofV2BridgeOnly(operation.payload,process.env,process.env.DB_PATH);}
+        catch(error){return response(res,error.status||409,{code:error.code||'proof_v2_bridge_required',error:error.message});}
+      }
+      return next();
+    });
+  }
   return true;
 }
 
