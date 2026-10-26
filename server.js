@@ -4889,6 +4889,9 @@ const fieldQaDbReady=process.env.NODE_ENV!=='production' &&
 createDriverFieldOpsQa({app,sqlite3,dbPath,query,qaEnabled:fieldQaDbReady});
 
 const mobileDriverRoles = ['driver', 'delivery_driver'];
+// Phase 3: QA read contracts only; gated by the same disposable QA DB flag.
+const { createDriverReadContractQa } = require('./services/driver-read-contract-qa');
+createDriverReadContractQa({ app, query, qaEnabled: fieldQaDbReady });
 const mobileDeliveryActions = ['start', 'deliver', 'fail', 'reschedule'];
 const proofContentTypes = ['image/png', 'image/jpeg', 'image/webp'];
 
