@@ -22,14 +22,14 @@ test('TDD: retired delivery OTP cannot be requested or supplied in QA proof-v2',
  assert.equal(ensureNoLegacyDeliveryOtp({NODE_ENV:'production'},'/srv/hayrila.db'),null);
 });
 test('TDD: central ERP direct delivery and offline financial posting are denied until signed bridge is fully wired',()=>{
- const src=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+ const src=fs.readFileSync(path.join(__dirname,'../services/driver-read-contract-qa.js'),'utf8');
  for(const exact of [
   "app.post('/api/driver/deliveries/:id/otp'",
   "app.post('/api/customer/deliveries/:id/otp'",
   "app.post('/api/driver/deliveries/:id/action'",
-  "async function applyOfflineDriverOperation(req, operation, syncRecordId)"
+  "app.post('/api/driver/offline-sync'"
  ])assert.ok(src.includes(exact),exact);
- assert.match(src,/ensureNoLegacyDeliveryOtp\(process\.env, dbPath\)/);
- assert.match(src,/assertProofV2BridgeOnly\(req\.body,process\.env,dbPath\)/);
- assert.match(src,/assertProofV2BridgeOnly\(payload,process\.env,dbPath\)/);
+ assert.match(src,/ensureNoLegacyDeliveryOtp\(process\.env, process\.env\.DB_PATH\)/);
+ assert.match(src,/assertProofV2BridgeOnly\(req\.body,process\.env,process\.env\.DB_PATH\)/);
+ assert.match(src,/assertProofV2BridgeOnly\(operation\.payload,process\.env,process\.env\.DB_PATH\)/);
 });
