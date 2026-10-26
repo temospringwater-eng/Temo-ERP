@@ -1,6 +1,7 @@
 'use strict';
 const {fail,pos}=require('./driver-financial-bridge-validation-qa');
 const {postLedger}=require('./driver-financial-bridge-ledger-qa');
+const {reconcileAppliedBridgeReceiptQa}=require('./driver-financial-bridge-reconcile-qa');
 async function applyVerifiedBridgeReceipt(tx,event,digest){
  const s=event.source;
  const m=await tx.get('SELECT * FROM driver_finance_bridge_map WHERE d1_company_id=? AND d1_delivery_id=?',s.companyId,s.deliveryId);
@@ -15,7 +16,7 @@ async function applyVerifiedBridgeReceipt(tx,event,digest){
    fail('ERP mapping changed after posting: reconcile before acknowledgement');
   if(previous.event_sha256!==digest||previous.source_key!==s.idempotencyKey)
    fail('conflict: same D1 delivery changed financial receipt');
-  return JSON.parse(previous.result_json);
+  return reconcileAppliedBridgeReceiptQa(tx,{m,event,previous});
  }
  if(await tx.get('SELECT id FROM driver_finance_bridge_receipts WHERE company_id=? AND source_key=?',m.erp_company_id,s.idempotencyKey))
   fail('conflict: replay key belongs to different delivery');
