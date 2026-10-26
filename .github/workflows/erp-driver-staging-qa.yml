@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   recovered-source-and-full-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     env:
       NODE_ENV: test
