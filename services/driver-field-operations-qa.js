@@ -1,4 +1,5 @@
 'use strict';
+const {deliveryProofPolicy}=require('./delivery-proof-v2-retirement-qa');
 // Never mount outside isolated QA. Driver identity and company come from session middleware.
 const crypto=require('node:crypto');
 const {createSqlite3AtomicAdapter}=require('./driver-field-tx-qa');
@@ -84,9 +85,8 @@ function createDriverFieldOpsQa({app,sqlite3,dbPath,query,qaEnabled=false}){
  }));
  app.get('/api/driver/delivery-policy',response(async req=>{
   const a=await actor(req);
-  // Central Express ERP currently requires delivery OTP; never infer OTP-OFF
-  // from a D1 staging company policy or a client-supplied flag.
-  return {companyId:a.companyId,otpRequired:true};
+  // Only the server-authorized QA proof-v2 policy may disable delivery OTP.
+  return {companyId:a.companyId,...deliveryProofPolicy(process.env,process.env.DB_PATH)};
  }));
  app.get('/api/driver/bottle-types',response(async req=>{
   const a=await actor(req);
