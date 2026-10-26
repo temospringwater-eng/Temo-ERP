@@ -25,5 +25,11 @@ jobs:
         run: |
           node --check server.js
           node --test tests/source-integrity.test.cjs
+      - name: Install locked ERP server dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Native repo separation and driver RBAC backend unit regression
+        run: node --test tests/native-android-architecture.test.js
+      - name: Live local ERP HTTP boot and tenant isolation regression
+        run: node --test tests/api-smoke.test.js tests/tenant-isolation.test.js
       - name: TDD and disposable SQLite driver field integration
         run: node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs
