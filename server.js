@@ -4918,7 +4918,7 @@ async function verifyDeliveryOtp(req, delivery, challengeId, code) {
   const challenge = (await query('SELECT * FROM delivery_otp_challenges WHERE id = ? AND delivery_id = ? AND company_id = ? AND verified_at IS NULL', [Number(challengeId), delivery.id, req.companyId]))[0];
   if (!challenge || new Date(challenge.expires_at).getTime() < Date.now() || challenge.attempts >= 5) return false;
   await update('UPDATE delivery_otp_challenges SET attempts = attempts + 1 WHERE id = ?', [challenge.id]);
-  if (!/^\\d{6}$/.test(String(code || '')) || otpHash(code) !== challenge.code_hash) return false;
+  if (!/^\d{6}$/.test(String(code || '')) || otpHash(code) !== challenge.code_hash) return false;
   await update('UPDATE delivery_otp_challenges SET verified_at = CURRENT_TIMESTAMP WHERE id = ?', [challenge.id]);
   req.verifiedOtp = challenge;
   return true;
