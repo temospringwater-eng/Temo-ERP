@@ -54,23 +54,28 @@ app.use((req, res, next) => {
     }
   });
 
-  app.post('/api/me/password', async (req, res) => {
+  next();
+});
+
+app.post('/api/me/password', requireAuth, async (req, res) => {
     try {
       const currentPassword = String(req.body?.currentPassword || '');
       const newPassword = String(req.body?.newPassword || '');
       const confirmPassword = String(req.body?.confirmPassword || '');
-      const user = (await query('SELECT password_hash FROM users WHERE id = ? AND company_id = ?', [req.user.id, req.companyId]))[0];
+      const scopedSql = req.user.role === 'super_admin' ? 'id = ? AND company_id IS NULL' : 'id = ? AND company_id = ?';
+      const scopedParams = req.user.role === 'super_admin' ? [req.user.id] : [req.user.id, req.companyId];
+      const user = (await query('SELECT password_hash FROM users WHERE ' + scopedSql, scopedParams))[0];
       if (!user || !verifyPassword(currentPassword, user.password_hash)) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
       if (newPassword.length < 8 || newPassword !== confirmPassword) return res.status(400).json({ success: false, message: 'New passwords must match and contain at least 8 characters.' });
-      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ? AND company_id = ?', [hashPassword(newPassword), req.user.id, req.companyId]);
+      await update('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE ' + scopedSql,
+        [hashPassword(newPassword), ...scopedParams]);
       await writeAudit(req, 'password_change', 'user', req.user.id, null, { firstLogin: Boolean(req.user.must_change_password) });
       res.json({ success: true, mustChangePassword: false });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Unable to change password.' });
     }
   });
-  next();
-});
+
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -3418,8 +3423,8 @@ app.post('/api/companies/:id/users', async (req, res) => {
     }
     const { username, email, password, name, role = 'staff' } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (!username || !password || !name || !allowedRoles.includes(role)) {
       return res.status(400).json({ message: 'Name, username, password and a valid role are required.' });
     }
@@ -3455,8 +3460,8 @@ app.patch('/api/users/:id', async (req, res) => {
     }
     const { name, email, phone, role, active, status, password, mustChangePassword } = req.body || {};
     const allowedRoles = req.user.role === 'super_admin'
-      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff']
-      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff'];
+      ? ['company_admin', 'manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver']
+      : ['manager', 'accountant', 'sales_staff', 'inventory_staff', 'staff', 'driver', 'delivery_driver'];
     if (role && !allowedRoles.includes(role)) return res.status(400).json({ message: 'Invalid user role.' });
     if (status && !['active', 'inactive', 'suspended', 'archived'].includes(String(status).toLowerCase())) return res.status(400).json({ message: 'Invalid user status.' });
     const existing = (await query('SELECT * FROM users WHERE id = ?', [userId]))[0];
