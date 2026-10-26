@@ -65,6 +65,35 @@ function createDriverFieldOpsQa({app,sqlite3,dbPath,query,qaEnabled=false}){
   const c=await tx.get(scopeSql,...scopeArgs(a,id));
   if(!c)throw bad(403,'Customer scope revoked');return c;
  }
+ // Native Android read-only contracts. These are intentionally enabled only in
+ // disposable QA mode. Nothing here disables OTP or authorizes financial writes.
+ const nativePermissionKeys=Object.freeze([
+  'create_customer','create_order','view_balance','change_qty','change_price',
+  'edit_notes','manage_customer_schedule','gps_delivery_override',
+  'refund_security_deposit','sale_quotation','stock_negative_override',
+  'view_customer_ledger','collect_recovery','view_zone','view_van_stock'
+ ]);
+ app.get('/api/driver/permissions',response(async req=>{
+  const a=await actor(req);
+  const permissions=Object.fromEntries(nativePermissionKeys.map(key=>[key,false]));
+  const rows=await query('SELECT permission,enabled FROM driver_field_permissions WHERE company_id=? AND driver_id=?',
+   [a.companyId,a.driverId]);
+  for(const row of rows)if(Object.hasOwn(permissions,row.permission))
+   permissions[row.permission]=row.enabled===1;
+  return {driverId:a.driverId,permissions};
+ }));
+ app.get('/api/driver/delivery-policy',response(async req=>{
+  const a=await actor(req);
+  // Central Express ERP currently requires delivery OTP; never infer OTP-OFF
+  // from a D1 staging company policy or a client-supplied flag.
+  return {companyId:a.companyId,otpRequired:true};
+ }));
+ app.get('/api/driver/bottle-types',response(async req=>{
+  const a=await actor(req);
+  // No prices, stock levels or other-tenant products leave this driver route.
+  const items=await query('SELECT id,name FROM products WHERE company_id=? ORDER BY id LIMIT 200',[a.companyId]);
+  return {items};
+ }));
  app.get(route+'/customers',response(async req=>{
   const a=await actor(req);
   const rows=await query('SELECT id FROM customers WHERE company_id=? ORDER BY id DESC LIMIT 500',[a.companyId]);
