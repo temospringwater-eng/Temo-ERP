@@ -18,3 +18,8 @@ test('TDD: owning CI executes independent SQLite driver field integration and so
  assert.match(yaml,/timeout-minutes:\s*(?:1[0-5]|[1-9])\b/,'Bounded runner budget required');
  assert.doesNotMatch(yaml,/wrangler\s+deploy|cloudflare\s+deploy|\bnpm\s+run\s+deploy\b/i,'Never ship production in recovery CI');
 });
+
+test('TDD: ERP CI must prove disposable SQLite backup/restore without live-data access before release',()=>{
+ assert.match(yaml,/node --test tests\\/sqlite-restore-drill\\.test\\.cjs/,'Require isolated backup and restore drill in ERP CI');
+ assert.doesNotMatch(yaml,/--source\\s+[^\\n]*hayrila\\.db/,'CI must never restore or access a tracked production-like ERP DB');
+});
