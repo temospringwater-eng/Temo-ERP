@@ -1932,7 +1932,6 @@ function initializeDatabase() {
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
     }
-    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
       if (err) return console.error('Seed check failed:', err.message);
