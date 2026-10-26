@@ -12,24 +12,31 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  recovered-source-and-driver-sqlite:
+  recovered-source-and-full-regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    env:
+      NODE_ENV: test
+      TEMO_DRIVER_FIELD_OPS_QA: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Verify restored ERP boot sources and QA isolation
+          cache: 'npm'
+      - name: Verify recovered JavaScript and install locked dependencies
         run: |
           node --check server.js
-          node --test tests/source-integrity.test.cjs
-      - name: Install locked ERP server dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Native repo separation and driver RBAC backend unit regression
-        run: node --test tests/native-android-architecture.test.js
-      - name: Live local ERP HTTP boot and tenant isolation regression
-        run: node --test tests/api-smoke.test.js tests/tenant-isolation.test.js
-      - name: TDD and disposable SQLite driver field integration
-        run: node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs
+          npm ci --no-audit --no-fund
+      - name: TDD owning CI guard, recovered sources and frontend integrity
+        run: node --test tests/ci-pipeline-guard.test.cjs tests/source-integrity.test.cjs
+      - name: Production bootstrap fail-closed security regression
+        run: timeout -k 5s 100s node --test --test-force-exit tests/bootstrap-security.test.js
+      - name: Complete ERP unit and service integration regression
+        run: timeout -k 5s 230s node --test --test-force-exit --test-concurrency=1 --test-timeout=90000 tests/*.test.js
+      - name: Disposable SQLite driver field integration with atomic ledger tests
+        run: timeout -k 5s 100s node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs
