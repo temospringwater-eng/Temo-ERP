@@ -8,6 +8,11 @@ async function applyVerifiedBridgeReceipt(tx,event,digest){
   fail('explicit source-to-central ERP mapping mismatch');
  const previous=await tx.get('SELECT * FROM driver_finance_bridge_receipts WHERE d1_company_id=? AND d1_delivery_id=?',s.companyId,s.deliveryId);
  if(previous){
+  // A lost-ACK/offline retry may re-ack only the exact original ERP posting.
+  // Never silently accept a remapped company/delivery even if the signed D1 event is unchanged.
+  if(Number(previous.company_id)!==Number(m.erp_company_id)||
+     Number(previous.erp_delivery_id)!==Number(m.erp_delivery_id))
+   fail('ERP mapping changed after posting: reconcile before acknowledgement');
   if(previous.event_sha256!==digest||previous.source_key!==s.idempotencyKey)
    fail('conflict: same D1 delivery changed financial receipt');
   return JSON.parse(previous.result_json);
