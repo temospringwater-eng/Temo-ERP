@@ -14,6 +14,8 @@ function createSqlite3AtomicAdapter({sqlite3,dbPath}){
    const exec=sql=>new Promise((resolve,reject)=>handle.exec(sql,err=>err?reject(err):resolve()));
    const get=(sql,...args)=>new Promise((resolve,reject)=>
      handle.get(sql,args,(error,row)=>error?reject(error):resolve(row)));
+   const all=(sql,...args)=>new Promise((resolve,reject)=>
+     handle.all(sql,args,(error,rows)=>error?reject(error):resolve(rows)));
    const run=(sql,...args)=>new Promise((resolve,reject)=>
      handle.run(sql,args,function(error){
        if(error)reject(error);else resolve({changes:this.changes,lastID:this.lastID});
@@ -23,7 +25,7 @@ function createSqlite3AtomicAdapter({sqlite3,dbPath}){
     await exec('PRAGMA busy_timeout=5000');
     await exec('BEGIN IMMEDIATE');
     started=true;
-    const outcome=await fn({get,run});
+    const outcome=await fn({get,all,run});
     await exec('COMMIT');
     started=false;
     return outcome;

@@ -39,4 +39,4 @@ jobs:
       - name: Complete ERP unit and service integration regression
         run: timeout -k 5s 230s node --test --test-force-exit --test-concurrency=1 --test-timeout=90000 tests/*.test.js
       - name: Disposable SQLite driver field integration with atomic ledger tests
-        run: timeout -k 5s 100s node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs
+        run: timeout -k 5s 100s node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs tests/driver-financial-bridge.integration.test.cjs
