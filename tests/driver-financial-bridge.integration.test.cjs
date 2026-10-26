@@ -170,3 +170,36 @@ test('TDD D1 Worker WebCrypto HMAC receipt interoperates with ERP and rejects ta
  assert.deepEqual(await f.service.post({event:e,signature:sourceSignature}),posted);
  assert.equal(f.count('payments'),1);
 });
+
+test('TDD lost-ACK replay refuses to acknowledge missing or modified ERP payment and credit entries',async()=>{
+ for(const mutation of [
+  'DELETE FROM payments WHERE delivery_id=801',
+  "DELETE FROM credit_ledger WHERE entry_type='payment'",
+  'UPDATE payments SET amount=99 WHERE delivery_id=801'
+ ]){
+  const f=fixture();
+  try{
+   const e=event(),signature=signBridgeEvent(secret,e);
+   await f.service.post({event:e,signature});
+   f.db.exec(mutation);
+   await assert.rejects(f.service.post({event:e,signature}),/reconcil|payment|ledger/i);
+   assert.equal(f.count('driver_finance_bridge_receipts'),1);
+  }finally{f.close()}
+ }
+});
+test('TDD lost-ACK replay refuses to acknowledge missing proof/GPS, stock or reverted delivery',async()=>{
+ for(const mutation of [
+  'DELETE FROM driver_finance_bridge_proof_gps WHERE erp_delivery_id=801',
+  'DELETE FROM stock_movements WHERE reference=\'DELIVERY-801\'',
+  "UPDATE deliveries SET status='assigned' WHERE id=801"
+ ]){
+  const f=fixture();
+  try{
+   const e=event(),signature=signBridgeEvent(secret,e);
+   await f.service.post({event:e,signature});
+   f.db.exec(mutation);
+   await assert.rejects(f.service.post({event:e,signature}),/reconcil|proof|stock|delivery/i);
+   assert.equal(f.count('payments'),1); // no replay mutation may double-charge
+  }finally{f.close()}
+ }
+});
