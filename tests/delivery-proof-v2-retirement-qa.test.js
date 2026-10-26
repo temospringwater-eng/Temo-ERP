@@ -29,7 +29,7 @@ test('TDD: central ERP direct delivery and offline financial posting are denied 
   "app.post('/api/driver/deliveries/:id/action'",
   "app.post('/api/driver/offline-sync'"
  ])assert.ok(src.includes(exact),exact);
- assert.match(src,/ensureNoLegacyDeliveryOtp\(process\.env, process\.env\.DB_PATH\)/);
+ assert.match(src,/ensureNoLegacyDeliveryOtp\(process\.env,\s*process\.env\.DB_PATH\)/);
  assert.match(src,/assertProofV2BridgeOnly\(req\.body,process\.env,process\.env\.DB_PATH\)/);
  assert.match(src,/assertProofV2BridgeOnly\(operation\.payload,process\.env,process\.env\.DB_PATH\)/);
 });
