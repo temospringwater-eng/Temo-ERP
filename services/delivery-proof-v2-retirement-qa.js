@@ -3,7 +3,7 @@
 const proof={otpRequired:false,proofMode:'signature_photo_gps',signatureRequired:true,photoRequired:true,gpsRequired:true};
 function isProofV2Qa(env,dbPath){
  return env?.NODE_ENV!=='production'&&env?.TEMO_DELIVERY_PROOF_MODE==='signature_photo_gps'&&
-  typeof dbPath==='string'&&/(?:^|[\\/])[^\\/]*qa[^\\/]*\\.db$/i.test(dbPath);
+  typeof dbPath==='string'&&/(?:^|[\\/])[^\\/]*qa[^\\/]*\.db$/i.test(dbPath);
 }
 function deliveryProofPolicy(env,dbPath){
  return isProofV2Qa(env,dbPath)?{...proof}:{otpRequired:true,source:'legacy-until-verified-migration'};
