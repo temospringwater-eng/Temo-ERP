@@ -147,3 +147,26 @@ test('TDD replay cannot acknowledge a remapped ERP company or delivery after sou
  assert.equal(f.count('driver_finance_bridge_receipts'),1);
  assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,18);
 });
+
+test('TDD D1 Worker WebCrypto HMAC receipt interoperates with ERP and rejects tampered proof before ledger posting',async t=>{
+ const f=fixture();t.after(f.close);
+ const e=event();
+ // Independent source-side algorithm: the Cloudflare Worker signs JSON.stringify(event)
+ // using WebCrypto, while ERP verifies with node:crypto timing-safe HMAC.
+ const {webcrypto}=require('node:crypto');
+ const key=await webcrypto.subtle.importKey('raw',new TextEncoder().encode(secret),
+  {name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const bytes=await webcrypto.subtle.sign('HMAC',key,new TextEncoder().encode(JSON.stringify(e)));
+ const sourceSignature=Buffer.from(bytes).toString('hex');
+ assert.equal(sourceSignature,signBridgeEvent(secret,e));
+ const changed={...e,proof:{...e.proof,photo:{...e.proof.photo,sha256:'c'.repeat(64)}}};
+ await assert.rejects(f.service.post({event:changed,signature:sourceSignature}),/signature/i);
+ assert.equal(f.count('payments'),0);
+ assert.equal(f.count('driver_finance_bridge_receipts'),0);
+ const posted=await f.service.post({event:e,signature:sourceSignature});
+ assert.equal(posted.status,'applied');
+ assert.equal(f.count('payments'),1);
+ assert.equal(f.count('driver_finance_bridge_receipts'),1);
+ assert.deepEqual(await f.service.post({event:e,signature:sourceSignature}),posted);
+ assert.equal(f.count('payments'),1);
+});
