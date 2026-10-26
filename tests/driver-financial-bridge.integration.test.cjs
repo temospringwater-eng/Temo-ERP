@@ -78,7 +78,7 @@ test('TDD integration: verified D1 receipt posts payment, invoice/customer credi
  assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,18);
  assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=52').get().stock,7);
  assert.equal(f.db.prepare('SELECT SUM(delivered_quantity) q FROM order_items').get().q,3);
- assert.equal(f.db.prepare('SELECT SUM(CASE WHEN entry_type="debit" THEN amount ELSE -amount END) balance FROM credit_ledger').get().balance,50);
+ assert.equal(f.db.prepare("SELECT SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END) balance FROM credit_ledger").get().balance,50);
  assert.equal(f.count('payments'),1);assert.equal(f.count('credit_ledger'),2);
  assert.equal(f.count('stock_movements'),2);assert.equal(f.count('bottle_movements'),1);
  assert.equal(f.count('delivery_bottle_counts'),1);assert.equal(f.count('delivery_proofs'),1);
