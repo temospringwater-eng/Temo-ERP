@@ -1923,7 +1923,10 @@ function initializeDatabase() {
       WHERE NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.company_id = p.company_id AND sm.reference = 'PURCHASE-' || p.id AND sm.product_id = pi.product_id)
     `);
 
+    if (process.env.NODE_ENV !== 'production') {
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
+    db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
+    }
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
 
     db.get('SELECT COUNT(*) AS count FROM products', (err, row) => {
@@ -6634,4 +6637,55 @@ function startServer(port) {
   });
 }
 
-startServer(PORT);
+
+/**
+ * Production must never expose a predictable Super Admin or Company Admin password.
+ * Safe migration: only missing accounts are created, and ONLY known legacy default
+ * credentials are rotated. Existing non-default passwords remain unchanged.
+ */
+async function enforceProductionBootstrapCredentials() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const strong = (value, name) => {
+    if (value === undefined || value === '') return null;
+    if (typeof value !== 'string' || value.length < 16 ||
+        ['admin123', 'password', 'changeme', 'admin1234567890123'].includes(value.toLowerCase()))
+      throw new Error(name + ' must contain at least 16 characters and cannot be a default password');
+    return value;
+  };
+  const superPass = strong(process.env.TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD, 'Super Admin bootstrap password');
+  const adminPass = strong(process.env.TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD, 'Company Admin bootstrap password');
+  const admins = await query("SELECT id,username,password_hash FROM users WHERE username IN ('superadmin','admin')");
+  const superAdmin = admins.find(row => row.username === 'superadmin');
+  const companyAdmin = admins.find(row => row.username === 'admin');
+  if ((!superAdmin || verifyPassword('admin123', superAdmin.password_hash)) && !superPass)
+    throw new Error('Super Admin is not provisioned with strong production credentials');
+  if ((!companyAdmin || verifyPassword('admin123', companyAdmin.password_hash)) && !adminPass)
+    throw new Error('Company Admin is not provisioned with strong production credentials');
+
+  if (!superAdmin) {
+    await insert("INSERT INTO users (company_id,username,password_hash,name,role) VALUES (NULL,'superadmin',?,'Platform Owner','super_admin')", [hashPassword(superPass)]);
+  } else if (verifyPassword('admin123', superAdmin.password_hash)) {
+    await update("UPDATE users SET password_hash=? WHERE id=? AND username='superadmin' AND role='super_admin'",
+      [hashPassword(superPass),superAdmin.id]);
+  }
+  if (!companyAdmin) {
+    const companies = await query('SELECT id FROM companies ORDER BY id LIMIT 1');
+    if (!companies.length) throw new Error('Company Admin cannot be provisioned without a company');
+    await insert("INSERT INTO users (company_id,username,password_hash,name,role) VALUES (?,'admin',?,'Company Admin','company_admin')",
+      [companies[0].id,hashPassword(adminPass)]);
+  } else if (verifyPassword('admin123', companyAdmin.password_hash)) {
+    await update("UPDATE users SET password_hash=? WHERE id=? AND username='admin' AND role='company_admin'",
+      [hashPassword(adminPass),companyAdmin.id]);
+  }
+  // Revocation ensures stale sessions cannot persist across a legacy-password rotation.
+  await update("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username IN ('superadmin','admin')) AND expires_at < datetime('now')");
+}
+
+(async () => {
+  await enforceProductionBootstrapCredentials();
+  startServer(PORT);
+})().catch(error => {
+  console.error('ERP secure startup refused:', error.message);
+  process.exitCode = 1;
+  db.close(() => process.exit(1));
+});
