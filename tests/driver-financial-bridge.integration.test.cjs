@@ -118,3 +118,32 @@ test('TDD integration: insufficient warehouse inventory stops all financial post
  await assert.rejects(f.service.post({event:e,signature:signBridgeEvent(secret,e)}),/stock/i);
  assert.equal(f.count('payments'),0);assert.equal(f.db.prepare('SELECT status FROM deliveries WHERE id=801').get().status,'out_for_delivery');
 });
+
+test('TDD offline retry after lost acknowledgement and concurrent duplicate: ERP posts exactly once',async t=>{
+ const f=fixture();t.after(f.close);
+ const e=event(),signature=signBridgeEvent(secret,e);
+ // Simulates the same signed D1 completion being retried before the prior ACK arrives.
+ const receipts=await Promise.all(Array.from({length:3},()=>f.service.post({event:e,signature})));
+ assert.deepEqual(receipts[0],receipts[1]);
+ assert.deepEqual(receipts[1],receipts[2]);
+ assert.deepEqual(await f.service.post({event:e,signature}),receipts[0]); // reboot/retry
+ assert.equal(f.count('driver_finance_bridge_receipts'),1);
+ assert.equal(f.count('payments'),1);
+ assert.equal(f.count('credit_ledger'),2);
+ assert.equal(f.count('stock_movements'),2);
+ assert.equal(f.count('delivery_proofs'),1);
+ assert.equal(f.count('driver_finance_bridge_proof_gps'),1);
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,18);
+});
+test('TDD replay cannot acknowledge a remapped ERP company or delivery after source posting',async t=>{
+ const f=fixture();t.after(f.close);
+ const e=event(),signature=signBridgeEvent(secret,e);
+ const first=await f.service.post({event:e,signature});
+ assert.equal(first.companyId,40);
+ // Independent mapping review must be stable; stale/corrupt mapping must not silently ACK.
+ f.db.exec('UPDATE driver_finance_bridge_map SET erp_company_id=41,erp_delivery_id=999 WHERE d1_company_id=1 AND d1_delivery_id=301');
+ await assert.rejects(f.service.post({event:e,signature}),/mapping|reconcile|changed/i);
+ assert.equal(f.count('payments'),1);
+ assert.equal(f.count('driver_finance_bridge_receipts'),1);
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,18);
+});
