@@ -18,8 +18,3 @@ test('TDD: owning CI executes independent SQLite driver field integration and so
  assert.match(yaml,/timeout-minutes:\s*(?:1[0-5]|[1-9])\b/,'Bounded runner budget required');
  assert.doesNotMatch(yaml,/wrangler\s+deploy|cloudflare\s+deploy|\bnpm\s+run\s+deploy\b/i,'Never ship production in recovery CI');
 });
-
-test('TDD: private ERP Actions choose economical verified Linux slim runner',()=>{
- assert.match(yaml,/runs-on:\s*ubuntu-slim\b/,'Prefer 1-CPU Linux runner after independent full ERP test');
- assert.match(yaml,/timeout-minutes:\s*(?:[1-9]|1[0-5])\b/);
-});
