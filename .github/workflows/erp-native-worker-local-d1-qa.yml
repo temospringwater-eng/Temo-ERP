@@ -1,0 +1,53 @@
+name: TEMO ERP Native Worker + D1 LOCAL Phase 1 Gate
+on:
+  pull_request:
+    paths:
+      - 'server.js'
+      - 'worker/erp-d1-stage1-qa.mjs'
+      - 'services/erp-d1-worker-readiness-qa.mjs'
+      - 'services/d1-erp-base-table-manifest-qa.mjs'
+      - 'services/d1-erp-base-column-manifest-qa.mjs'
+      - 'services/d1-erp-base-fk-manifest-qa.mjs'
+      - 'services/d1-erp-base-unique-manifest-qa.mjs'
+      - 'services/d1-erp-full-schema-preflight.mjs'
+      - 'tests/erp-d1-native-worker-local.test.mjs'
+      - 'tests/erp-d1-stage1-worker.integration.test.mjs'
+      - 'scripts/erp-d1-native-worker-local-qa.mjs'
+      - '.github/workflows/erp-native-worker-local-d1-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server.js'
+      - 'worker/erp-d1-stage1-qa.mjs'
+      - 'services/erp-d1-worker-readiness-qa.mjs'
+      - 'services/d1-erp-base-table-manifest-qa.mjs'
+      - 'services/d1-erp-base-column-manifest-qa.mjs'
+      - 'services/d1-erp-base-fk-manifest-qa.mjs'
+      - 'services/d1-erp-base-unique-manifest-qa.mjs'
+      - 'services/d1-erp-full-schema-preflight.mjs'
+      - 'tests/erp-d1-native-worker-local.test.mjs'
+      - 'tests/erp-d1-stage1-worker.integration.test.mjs'
+      - 'scripts/erp-d1-native-worker-local-qa.mjs'
+      - '.github/workflows/erp-native-worker-local-d1-qa.yml'
+permissions:
+  contents: read
+jobs:
+  native-workerd-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: TDD syntax, unit and real disposable SQLite Worker integration tests
+        run: |
+          node --check worker/erp-d1-stage1-qa.mjs
+          node --check scripts/erp-d1-native-worker-local-qa.mjs
+          node --experimental-sqlite --test tests/erp-d1-native-worker-local.test.mjs tests/erp-d1-stage1-worker.integration.test.mjs
+      - name: Install Wrangler v4 in isolated temporary directory (no Cloudflare credentials)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/temo-d1-stage1-workerd" --no-save --no-audit --no-fund wrangler@4
+          echo "TEMO_WRANGLER_BINARY=$RUNNER_TEMP/temo-d1-stage1-workerd/node_modules/.bin/wrangler" >> "$GITHUB_ENV"
+      - name: Launch real Cloudflare Worker + D1 LOCAL, verify full 114-table schema, auth, no financial routes
+        run: node scripts/erp-d1-native-worker-local-qa.mjs
