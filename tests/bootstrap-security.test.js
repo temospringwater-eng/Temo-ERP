@@ -107,3 +107,26 @@ test('TDD hosted QA startup source binds loopback only, never 0.0.0.0',()=>{
  assert.match(source,/TEMO_ERP_HOSTED_QA/);
  assert.match(source,/127\.0\.0\.1/);
 });
+
+test('TDD hosted QA SQLite survives shutdown/restart without demo credentials or duplicate admins',async()=>{
+ const dbFile=path.join(dir,'restarted-hosted-qa.db');
+ const vars={NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
+  TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD:strongSuper,
+  TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD:strongAdmin};
+ for(let attempt=0;attempt<2;attempt++){
+  const proc=launch(dbFile,vars);
+  try{
+   await waitForReady(proc);
+   assert.equal((await login(proc,'superadmin',strongSuper)).status,200);
+   assert.equal((await login(proc,'admin',strongAdmin)).status,200);
+   assert.equal((await login(proc,'superadmin','admin123')).status,401);
+   assert.equal((await login(proc,'admin','admin123')).status,401);
+  }finally{await stop(proc);}
+ }
+ const {DatabaseSync}=require('node:sqlite');
+ const snapshot=new DatabaseSync(dbFile);
+ try{
+  const admins=snapshot.prepare("SELECT username,COUNT(*) n FROM users WHERE username IN ('superadmin','admin') GROUP BY username ORDER BY username").all();
+  assert.deepEqual(admins.map(x=>[x.username,Number(x.n)]),[['admin',1],['superadmin',1]]);
+ }finally{snapshot.close();}
+});
