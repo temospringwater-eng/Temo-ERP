@@ -17,10 +17,15 @@ function auditCrossSystemDelivery({d1,erp,mapping}) {
  const d1Delivery=d1.prepare('SELECT * FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND order_id=?')
   .get(m.d1Delivery,m.d1Company,m.d1Driver,m.d1Order);
  if(!d1Delivery||d1Delivery.status!=='completed')add('D1_DELIVERY_SCOPE_MISMATCH');
- const completed=d1.prepare('SELECT * FROM driver_delivery_completions WHERE delivery_id=? AND company_id=?')
-  .get(m.d1Delivery,m.d1Company);
- if(!completed)add('D1_COMPLETION_MISSING');
- const proof=d1.prepare('SELECT * FROM driver_delivery_evidence WHERE delivery_id=?').get(m.d1Delivery);
+ const completed=d1.prepare('SELECT * FROM driver_delivery_completions WHERE delivery_id=? AND company_id=? AND driver_id=?')
+  .get(m.d1Delivery,m.d1Company,m.d1Driver);
+ if(!completed){
+  const anyCompletion=d1.prepare('SELECT 1 FROM driver_delivery_completions WHERE delivery_id=? AND company_id=? LIMIT 1')
+   .get(m.d1Delivery,m.d1Company);
+  add(anyCompletion?'D1_COMPLETION_SCOPE_MISMATCH':'D1_COMPLETION_MISSING');
+ }
+ const proof=d1.prepare('SELECT * FROM driver_delivery_evidence WHERE delivery_id=? AND company_id=? AND driver_id=?')
+  .get(m.d1Delivery,m.d1Company,m.d1Driver);
  if(!proof||!proof.signature_key||!proof.photo_key||
     proof.signature_key!==completed?.proof_key||!Number.isFinite(proof.latitude)||
     !Number.isFinite(proof.longitude)||!(proof.accuracy_m>0))
