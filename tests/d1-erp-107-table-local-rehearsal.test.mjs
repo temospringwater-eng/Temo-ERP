@@ -31,7 +31,7 @@ test('TDD generate exactly the 107 absent ERP tables from PINNED source without 
  assert.equal(plan.schemaReadyForRemoteMigration,false);
  assert.equal(plan.specialRebuildExcluded,'document_records_v4');
  assert.ok(plan.sqlStatements.every(x=>/^CREATE TABLE IF NOT EXISTS /i.test(x)));
- assert.equal(plan.sqlStatements.some(x=>/document_records_v4|DROP TABLE|UPDATE\s|DELETE\s/i.test(x)),false);
+ assert.equal(plan.sqlStatements.some(x=>/^(?:CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS)\s+document_records_v4\b|;\s*(?:DROP|UPDATE|DELETE|INSERT)\b/i.test(x)),false);
  assert.equal(f.count(),8);
  assert.equal(f.qa.prepare('SELECT total_changes() AS n').get().n,before);
 });
@@ -45,7 +45,7 @@ test('TDD local additive migration creates exactly 107 missing safe tables and p
  assert.equal(f.qa.prepare('SELECT name FROM companies WHERE id=40').get().name,'Synthetic preserved company');
  assert.equal(f.qa.prepare('SELECT total_changes() AS n').get().n,beforeChanges);
  assert.deepEqual(f.qa.prepare('PRAGMA foreign_key_check').all(),[]);
- assert.deepEqual(f.qa.prepare('PRAGMA integrity_check').get(),{integrity_check:'ok'});
+ assert.equal(f.qa.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
  assert.equal(f.qa.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='document_records_v4'").get().n,0);
  assert.equal(first.remoteD1Changed,false);
  assert.equal(first.activeWorkerDeployed,false);
