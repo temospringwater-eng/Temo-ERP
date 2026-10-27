@@ -1,10 +1,23 @@
-// Worker-compatible ERP QA diagnostic adapter. NOT mounted, not deployed,
-// no customer reads, migrations, secret output or financial posting.
+// Worker-compatible read-only ERP QA diagnostic; NOT mounted or deployed.
+// Only table/column metadata is queried, NEVER customer/finance rows or remote DDL.
+// 11 driver core tables are NOT enough to claim central ERP schema compatibility.
+import {ERP_D1_BASE_TABLES} from './d1-erp-base-table-manifest-qa.mjs';
+import {ERP_D1_BASE_COLUMNS} from './d1-erp-base-column-manifest-qa.mjs';
 export const ERP_D1_CORE_TABLES=Object.freeze([
  'companies','users','customers','products','orders','deliveries','payments',
  'credit_ledger','stock_movements','bottle_movements','driver_finance_outbox'
 ]);
-const QUERY="SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name";
+const CORE_COLUMNS=Object.freeze({
+ companies:['id','name','active'],
+ users:['id','company_id','role','active'],
+ customers:['id','company_id','name'],
+ products:['id','company_id','stock'],
+ orders:['id','company_id','customer_id','status','total_amount'],
+ deliveries:['id','company_id','order_id','driver_id','status','collected_amount'],
+ payments:['id','company_id','delivery_id','amount','method']
+});
+const TABLE_NAMES="SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name";
+const SAFE_NAME=/^[A-Za-z_][A-Za-z0-9_]{0,99}$/;
 async function sameSecret(a,b){
  if(typeof a!=='string'||typeof b!=='string'||b.length<32)return false;
  const enc=new TextEncoder();
@@ -16,6 +29,20 @@ async function sameSecret(a,b){
 function json(response,status){
  return new Response(JSON.stringify(response),{status,headers:{'content-type':'application/json;charset=utf-8',
   'cache-control':'no-store','x-content-type-options':'nosniff'}});
+}
+async function readTableInfo(db,name){
+ // name comes ONLY from pinned internal ERP base manifest or fixed core contract.
+ if(!SAFE_NAME.test(name))throw Error('unsafe base metadata identifier');
+ const rows=await db.prepare("PRAGMA table_info('"+name+"')").all();
+ if(!Array.isArray(rows?.results)||rows.success===false)
+  throw Error('invalid D1 schema metadata result');
+ const columns=new Map();
+ for(const col of rows.results){
+  if(!col||!SAFE_NAME.test(col.name)||typeof col.type!=='string'||columns.has(col.name))
+   throw Error('untrusted D1 schema column data');
+  columns.set(col.name,String(col.type).toUpperCase());
+ }
+ return columns;
 }
 export function createErpD1QaReadinessHandler(){
  return async function handle(request,env){
@@ -32,13 +59,53 @@ export function createErpD1QaReadinessHandler(){
     env.TEMO_ERP_QA_DIAGNOSTIC_SECRET))return json({error:'unauthorized'},401);
   if(!env.DB||typeof env.DB.prepare!=='function')return json({error:'qa_d1_unavailable'},503);
   try{
-   const response=await env.DB.prepare(QUERY).all();
-   if(!Array.isArray(response?.results)||response?.success===false)
+   if(ERP_D1_BASE_TABLES.length!==114||Object.keys(ERP_D1_BASE_COLUMNS).length!==114||
+      ERP_D1_BASE_TABLES.some(name=>!SAFE_NAME.test(name)||!ERP_D1_BASE_COLUMNS[name]))
+    throw Error('source manifest invalid');
+   const res=await env.DB.prepare(TABLE_NAMES).all();
+   if(!Array.isArray(res?.results)||res.success===false)
     throw Error('D1 schema list refused');
-   const names=new Set(response.results.map(x=>x.name).filter(x=>typeof x==='string'));
-   const missing=ERP_D1_CORE_TABLES.filter(name=>!names.has(name));
-   return json({qaOnly:true,canonicalSchemaReady:missing.length===0,
-    tableCount:names.size,missingTables:missing},200);
+   const list=res.results.map(x=>x?.name);
+   if(list.some(x=>typeof x!=='string'||!SAFE_NAME.test(x))||
+      new Set(list).size!==list.length)
+    throw Error('invalid table names in D1 schema');
+   const names=new Set(list);
+   const missingCore=ERP_D1_CORE_TABLES.filter(name=>!names.has(name));
+   const missing=ERP_D1_BASE_TABLES.filter(name=>!names.has(name));
+   const baseColumnGaps=[],criticalColumnGaps=[];
+   const inspected=new Map();
+   for(const table of ERP_D1_BASE_TABLES){
+    if(!names.has(table))continue;
+    const actual=await readTableInfo(env.DB,table);
+    inspected.set(table,actual);
+    const fields=ERP_D1_BASE_COLUMNS[table],missingFields=[];
+    if(!Array.isArray(fields)||fields.length===0)throw Error('invalid source column contract');
+    for(const pair of fields){
+     const [column,type]=pair;
+     if(!SAFE_NAME.test(column)||!['INTEGER','TEXT','REAL'].includes(type))
+      throw Error('invalid pinned source column definition');
+     if(!actual.has(column)||actual.get(column)!==type)
+      missingFields.push(column);
+    }
+    if(missingFields.length)baseColumnGaps.push({table,fields:missingFields});
+   }
+   for(const [table,fields] of Object.entries(CORE_COLUMNS)){
+    if(!names.has(table))continue;
+    const actual=inspected.get(table)||await readTableInfo(env.DB,table);
+    const absent=fields.filter(name=>!actual.has(name));
+    if(absent.length)criticalColumnGaps.push({table,fields:absent});
+   }
+   const baseSchemaNameAndColumnReady=missing.length===0&&baseColumnGaps.length===0;
+   const coreSchemaReady=missingCore.length===0;
+   // Additional runtime ALTERs, FKs, indexes, tenant mappings and actual
+   // Worker deployment still have separate release gates. This never flips posting.
+   const canonicalSchemaReady=baseSchemaNameAndColumnReady&&coreSchemaReady&&
+      criticalColumnGaps.length===0;
+   return json({qaOnly:true,coreSchemaReady,baseSchemaNameAndColumnReady,
+    canonicalSchemaReady,tableCount:names.size,expectedErpBaseTables:114,
+    missingTables:missing,missingCoreTables:missingCore,
+    baseColumnGaps,criticalColumnGaps,
+    financeCutoverAllowed:false,productionReady:false},200);
   }catch{
    return json({error:'qa_d1_schema_unavailable'},503);
   }
