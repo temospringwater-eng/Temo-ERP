@@ -263,7 +263,9 @@ test('TDD full signed D1→ERP private HTTP bridge posts once, ACK maps D1 compa
   const text=await response.text();
   return{code:response.status,raw:text,data:JSON.parse(text),headers:response.headers,stamp};
  };
- const first=await send();
+ // Offline replay must retain the ORIGINAL immutable signed proof timestamps and hashes.
+ const immutableSource=event();
+ const first=await send(immutableSource);
  assert.equal(first.code,200,first.raw);
  assert.equal(first.data.receipt.d1CompanyId,1);
  assert.equal(first.data.receipt.companyId,40);
@@ -271,7 +273,7 @@ test('TDD full signed D1→ERP private HTTP bridge posts once, ACK maps D1 compa
  assert.equal(first.data.receipt.d1DeliveryId,301);
  assert.equal(first.headers.get('x-temo-qa-ack'),
   requestMac(transportSecret,first.headers.get('x-temo-qa-ack-time'),first.raw));
- const retry=await send();
+ const retry=await send(immutableSource);
  assert.equal(retry.code,200,retry.raw);
  assert.deepEqual(retry.data.receipt,first.data.receipt);
  assert.equal(f.count('payments'),1);
