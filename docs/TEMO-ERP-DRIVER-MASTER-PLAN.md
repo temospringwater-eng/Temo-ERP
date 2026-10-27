@@ -116,6 +116,12 @@ For each phase report: `Phase | Done/Active/Blocked | exact PR/CI evidence | roo
 - Phase 0 main-CI fixes merged in ERP PR #30 and Driver PR #63; full blocker register in [Phase 0 evidence report](TEMO-PHASE0-VERIFIED-BASELINE.md).
 - The active Cloudflare delivery-policy HTTP 404 is **explained** by active-vs-uploaded version mismatch, not fixed or released; promotion belongs to Phase 4 after isolated finance sync testing and rollback. Open legacy OTP PRs remain frozen.
 
+### Verified Cloudflare D1 migration blocker (27 October 2026)
+- Exact read-only Worker-bound QA D1 audit: **19 physical D1 tables**, only **8/115 ERP source tables matched**; **107 ERP tables missing**, including warehouse, stock, sales, credit and bottle finance ledgers. Core 8-table Driver contract passes but **is not full ERP compatibility**.
+- [Prioritized D1 schema parity and migration dependency register](CLOUDFLARE-D1-115-TABLE-READINESS.md) records the verified parent-table-first approach.
+- [Cloudflare actual parity audit](https://github.com/babar200/TEMO-Driver-Android-QA/actions/runs/40462301601) passed; results explicitly classify live financial sync as BLOCKED.
+- Do not deploy or import all 115 tables into the current D1. First verify QA recovery, parent schema/tenant FKs, then dependent invoice/stock/credit/bottle ledgers using disposable QA tests.
+
 ### Current checkpoint — Phase 1 (active)
 - Secure hosted QA startup guard (strong bootstrap credentials, loopback-only, QA-specific DB path) merged: ERP PR #32.
 - Hosted QA SQLite restart, strong credentials and non-duplicate privileged account integration tests **passed** and were merged in ERP PR #33; merged-main full regression passed: https://github.com/temospringwater-eng/Temo-ERP/actions/runs/40455314624 . Actual persistent cloud QA host is still unprovisioned.
