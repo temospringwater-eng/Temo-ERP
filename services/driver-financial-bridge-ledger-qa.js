@@ -43,7 +43,7 @@ async function postLedger(tx,{m,event,items,customer,orderTotal,reference,digest
   m.erp_delivery_id,m.erp_company_id,proof.gps.latitude,proof.gps.longitude,proof.gps.accuracyMeters,proof.gps.capturedAt,
   proof.signature.sha256,proof.photo.sha256,source.deliveryId);
  const receipt={status:'applied',erpDeliveryId:m.erp_delivery_id,d1DeliveryId:source.deliveryId,
-  companyId:m.erp_company_id,paymentId,amount:event.payment.amount,
+  d1CompanyId:source.companyId,companyId:m.erp_company_id,paymentId,amount:event.payment.amount,
   returnedCount:event.returnedCount,emptyCount:event.emptyCount,stockLines:items.length};
  await tx.run('INSERT INTO driver_finance_bridge_receipts(company_id,d1_company_id,d1_delivery_id,erp_delivery_id,source_key,event_sha256,payment_id,result_json) VALUES(?,?,?,?,?,?,?,?)',
   m.erp_company_id,source.companyId,source.deliveryId,m.erp_delivery_id,source.idempotencyKey,digest,paymentId,JSON.stringify(receipt));
