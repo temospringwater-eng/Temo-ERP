@@ -136,3 +136,56 @@ test('TDD malformed PRAGMA schema response refuses success without leaking D1 in
  assert.equal(r.status,503);
  assert.doesNotMatch(await r.text(),/SELECT|PRAGMA|customer|internal/i);
 });
+
+test('TDD pinned 276 ERP foreign keys match independent 114-table disposable SQLite baseline',t=>{
+ const {readFileSync}=require('node:fs'),{resolve}=require('node:path');
+ const {ERP_D1_BASE_FOREIGN_KEYS}=require('../services/d1-erp-base-fk-manifest-qa.mjs');
+ const {extractPinnedErpBaseDdl,createDisposableErpSchema}=require('../services/d1-erp-full-schema-preflight.mjs');
+ const sqlite=new DatabaseSync(':memory:');t.after(()=>sqlite.close());
+ const source=readFileSync(resolve(__dirname,'../server.js'),'utf8');
+ createDisposableErpSchema(sqlite,extractPinnedErpBaseDdl(source));
+ let n=0;
+ for(const [table,expected] of Object.entries(ERP_D1_BASE_FOREIGN_KEYS)){
+  const fks=sqlite.prepare("PRAGMA foreign_key_list('"+table+"')").all()
+   .map(r=>({from:r.from,table:r.table,to:r.to,onDelete:r.on_delete})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  assert.deepEqual(fks,expected,table);
+  n+=fks.length;
+ }
+ assert.equal(n,276);
+});
+test('TDD 114 table-name and all column matches can NEVER pass when one ERP foreign key is missing',async t=>{
+ const {readFileSync}=require('node:fs'),{resolve}=require('node:path');
+ const {extractPinnedErpBaseDdl,createDisposableErpSchema}=require('../services/d1-erp-full-schema-preflight.mjs');
+ const sqlite=new DatabaseSync(':memory:');t.after(()=>sqlite.close());
+ createDisposableErpSchema(sqlite,extractPinnedErpBaseDdl(readFileSync(resolve(__dirname,'../server.js'),'utf8')));
+ const legacy=sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get().sql;
+ assert.match(legacy,/FOREIGN KEY/i);
+ sqlite.exec('PRAGMA foreign_keys=OFF;BEGIN IMMEDIATE;');
+ try{
+  sqlite.exec("CREATE TABLE users_fk_replacement AS SELECT * FROM users WHERE 0");
+  sqlite.exec('DROP TABLE users');
+  sqlite.exec('ALTER TABLE users_fk_replacement RENAME TO users');
+  sqlite.exec('COMMIT');
+ }catch(e){sqlite.exec('ROLLBACK');throw e}
+ const audit=[];
+ const env={DB:{prepare(sql){audit.push(sql);return{all:async()=>({results:sqlite.prepare(sql).all()})}}},
+  TEMO_ERP_D1_QA_MODE:'1',TEMO_ERP_QA_DIAGNOSTIC_SECRET:secret};
+ const response=await createErpD1QaReadinessHandler()(req(),env),report=await response.json();
+ assert.equal(response.status,200);
+ assert.equal(report.canonicalSchemaReady,false);
+ assert.ok(report.baseFkGaps.some(x=>x.table==='users'&&x.missing.some(r=>r.from==='company_id')));
+ assert.equal(report.financeCutoverAllowed,false);
+ assert.ok(audit.some(sql=>sql==="PRAGMA foreign_key_list('users')"));
+});
+test('TDD malformed FK metadata cannot be interpreted as a successful canonical ERP schema',async t=>{
+ const f=fixture();t.after(f.close);
+ f.sqlite.exec('CREATE TABLE companies(id INTEGER PRIMARY KEY)');
+ const DB={prepare(sql){
+  if(sql.startsWith('SELECT'))return{all:async()=>({results:[{name:'companies'}]})};
+  if(sql.startsWith("PRAGMA table_info"))return{all:async()=>({results:[{name:'id',type:'INTEGER'}]})};
+  return{all:async()=>({success:false,results:[]})};
+ }};
+ const response=await createErpD1QaReadinessHandler()(req(),{...f.env,DB});
+ assert.equal(response.status,503);
+ assert.equal((await response.json()).error,'qa_d1_schema_unavailable');
+});
