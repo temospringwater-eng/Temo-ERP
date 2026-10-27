@@ -203,3 +203,34 @@ test('TDD lost-ACK replay refuses to acknowledge missing proof/GPS, stock or rev
   }finally{f.close()}
  }
 });
+
+test('TDD network integration: HMAC service-to-service receipt persists ERP ledgers once after lost ACK',async t=>{
+ const {createDriverFinanceHttpQa,requestMac}=require('../services/driver-finance-http-qa');
+ const express=require('express'),f=fixture();t.after(f.close);
+ const app=express(),transport='separate-transport-key-qa-32-bytes-long-and-private';
+ assert.equal(createDriverFinanceHttpQa({app,qaEnabled:true,nodeEnv:'test',dbPath:'/tmp/signed-bridge-qa.db',
+  transportSecret:transport,receiptSecret:secret,service:f.service}),true);
+ const server=app.listen(0,'127.0.0.1');await new Promise(ok=>server.once('listening',ok));
+ t.after(()=>new Promise(ok=>server.close(ok)));
+ const url='http://127.0.0.1:'+server.address().port+'/internal/qa/d1-driver-finance';
+ const e=event(),body=JSON.stringify({event:e,signature:signBridgeEvent(secret,e)});
+ async function send(raw=body){
+  const stamp=String(Date.now());
+  const result=await fetch(url,{method:'POST',body:raw,headers:{
+   'Content-Type':'application/json','x-temo-qa-timestamp':stamp,
+   'x-temo-qa-auth':requestMac(transport,stamp,raw)}});
+  const response=await result.text();
+  return {status:result.status,response,ack:result.headers.get('x-temo-qa-ack'),
+   validAck:result.headers.get('x-temo-qa-ack')===requestMac(transport,stamp,response)};
+ }
+ const first=await send(),again=await send();
+ assert.equal(first.status,200,first.response);assert.equal(again.status,200,again.response);
+ assert.equal(first.validAck,true);assert.equal(again.validAck,true);
+ assert.equal(f.count('payments'),1);assert.equal(f.count('credit_ledger'),2);
+ assert.equal(f.count('stock_movements'),2);assert.equal(f.count('delivery_bottle_counts'),1);
+ assert.equal(f.count('driver_finance_bridge_receipts'),1);
+ const modified={...e,payment:{amount:150,method:'cash'}};
+ const conflict=await send(JSON.stringify({event:modified,signature:signBridgeEvent(secret,modified)}));
+ assert.equal(conflict.status,409);assert.equal(conflict.ack,null);
+ assert.equal(f.count('payments'),1);
+});
