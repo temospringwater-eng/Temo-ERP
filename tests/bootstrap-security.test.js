@@ -8,26 +8,36 @@ const { spawn } = require('node:child_process');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'temo-bootstrap-test-'));
 const strongSuper = 'CI-Only-Strong-Super-2026!';
 const strongAdmin = 'CI-Only-Strong-Admin-2026!';
-let nextPort = 36500 + (process.pid % 1300);
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-function launch(database, overrides = {}) {
-  const env = { ...process.env, NODE_ENV: 'production', DB_PATH: database, PORT: String(++nextPort) };
+async function launch(database, overrides = {}) {
+  const env = { ...process.env, NODE_ENV: 'production', DB_PATH: database, PORT: '0' };
   delete env.TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD;
   delete env.TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD;
   Object.assign(env, overrides);
-  const child = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env, stdio: ['ignore', 'ignore', 'pipe'] });
+  const child = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
   let stderr = '';
+  child.stdout.on('data', (part) => { stdout += part.toString(); });
   child.stderr.on('data', (part) => { stderr += part.toString(); });
-  return { child, port: nextPort, errors: () => stderr };
+  return {
+    child,
+    get port() {
+      const match = stdout.match(/Hayrila starter running at http:\/\/localhost:(\d+)/);
+      return match ? Number(match[1]) : 0;
+    },
+    errors: () => stderr
+  };
 }
 
 async function waitForReady(proc) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (proc.child.exitCode !== null) throw new Error('Startup failed: ' + proc.errors());
     try {
-      const response = await fetch('http://127.0.0.1:' + proc.port + '/readiness');
-      if (response.ok && (await response.json()).ready) return;
+      if (proc.port) {
+        const response = await fetch('http://127.0.0.1:' + proc.port + '/readiness');
+        if (response.ok && (await response.json()).ready) return;
+      }
     } catch (_) { /* startup not complete */ }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -51,13 +61,13 @@ async function failsStartup(proc, errorText) {
 }
 
 test('production refuses first run without Super Admin credentials', async () => {
-  await failsStartup(launch(path.join(dir, 'missing.db')), /Super Admin is not provisioned/);
+  await failsStartup(await launch(path.join(dir, 'missing.db')), /Super Admin is not provisioned/);
 });
 test('production rejects known default bootstrap password', async () => {
-  await failsStartup(launch(path.join(dir, 'weak.db'), { TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: 'admin123' }), /at least 16 characters/);
+  await failsStartup(await launch(path.join(dir, 'weak.db'), { TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: 'admin123' }), /at least 16 characters/);
 });
 test('strong production bootstrap rejects default passwords and accepts configured ones', async () => {
-  const proc = launch(path.join(dir, 'strong.db'), { TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: strongSuper, TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: strongAdmin });
+  const proc = await launch(path.join(dir, 'strong.db'), { TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: strongSuper, TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: strongAdmin });
   try {
     await waitForReady(proc);
     assert.equal((await login(proc, 'superadmin', 'admin123')).status, 401);
@@ -68,9 +78,9 @@ test('strong production bootstrap rejects default passwords and accepts configur
 });
 test('legacy default passwords rotate on restart and stop working', async () => {
   const database = path.join(dir, 'legacy.db');
-  const old = launch(database, { NODE_ENV: 'test', TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: 'admin123', TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: 'admin123' });
+  const old = await launch(database, { NODE_ENV: 'test', TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: 'admin123', TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: 'admin123' });
   try { await waitForReady(old); assert.equal((await login(old, 'superadmin', 'admin123')).status, 200); } finally { await stop(old); }
-  const secure = launch(database, { TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: strongSuper, TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: strongAdmin });
+  const secure = await launch(database, { TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: strongSuper, TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: strongAdmin });
   try {
     await waitForReady(secure);
     assert.equal((await login(secure, 'superadmin', 'admin123')).status, 401);
@@ -81,17 +91,17 @@ test('legacy default passwords rotate on restart and stop working', async () => 
 });
 
 test('TDD hosted QA startup rejects missing strong credentials even with NODE_ENV=test',async()=>{
- const proc=launch(path.join(dir,'isolated-qa.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1'});
+ const proc=await launch(path.join(dir,'isolated-qa.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1'});
  await failsStartup(proc,/Super Admin is not provisioned/);
 });
 test('TDD hosted QA refuses normal production-like DB_PATH to prevent accidental mutation',async()=>{
- const proc=launch(path.join(dir,'hayrila.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
+ const proc=await launch(path.join(dir,'hayrila.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
   TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD:strongSuper,
   TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD:strongAdmin});
  await failsStartup(proc,/QA-only database|hosted QA/i);
 });
 test('TDD hosted QA authenticates only strong bootstrap accounts; admin123 forbidden',async()=>{
- const proc=launch(path.join(dir,'new-hosted-qa.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
+ const proc=await launch(path.join(dir,'new-hosted-qa.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
   TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD:strongSuper,
   TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD:strongAdmin});
  try{
@@ -114,7 +124,7 @@ test('TDD hosted QA SQLite survives shutdown/restart without demo credentials or
   TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD:strongSuper,
   TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD:strongAdmin};
  for(let attempt=0;attempt<2;attempt++){
-  const proc=launch(dbFile,vars);
+  const proc=await launch(dbFile,vars);
   try{
    await waitForReady(proc);
    assert.equal((await login(proc,'superadmin',strongSuper)).status,200);
