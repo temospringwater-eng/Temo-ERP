@@ -56,7 +56,7 @@ function fixture(){
   dbPath:file,secret,qaEnabled:true,nodeEnv:'test'});
  const count=table=>db.prepare('SELECT COUNT(*) n FROM '+table).get().n;
  const close=()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})};
- return {db,service,count,close};
+ return {db,file,service,count,close};
 }
 test('TDD: refuses normal and production database, missing secret or untrusted source',async t=>{
  const f=fixture();t.after(f.close);
@@ -236,4 +236,58 @@ test('TDD network integration: HMAC service-to-service receipt persists ERP ledg
  const conflict=await send(JSON.stringify({event:modified,signature:signBridgeEvent(secret,modified)}));
  assert.equal(conflict.status,409);assert.equal(conflict.ack,null);
  assert.equal(f.count('payments'),1);
+});
+
+test('TDD full signed D1→ERP private HTTP bridge posts once, ACK maps D1 company 1 to ERP 40; retry reconciles',async t=>{
+ const express=require('express');
+ const {createDriverFinanceHttpQa,requestMac}=require('../services/driver-finance-http-qa');
+ const f=fixture();t.after(f.close);
+ const transportSecret='qa-transport-secret-distinct-from-signing-key-2026';
+ const app=express();
+ const enabled=createDriverFinanceHttpQa({
+  app,qaEnabled:true,nodeEnv:'test',dbPath:f.file,service:f.service,
+  receiptSecret:secret,transportSecret
+ });
+ assert.equal(enabled,true);
+ const server=app.listen(0,'127.0.0.1');
+ await new Promise(done=>server.once('listening',done));
+ t.after(()=>new Promise(done=>server.close(done)));
+ const url='http://127.0.0.1:'+server.address().port+'/internal/qa/d1-driver-finance';
+ const send=async(source=event(),useCorrectMac=true)=>{
+  const stamp=String(Date.now());
+  const raw=JSON.stringify({event:source,signature:signBridgeEvent(secret,source)});
+  const signature=useCorrectMac?requestMac(transportSecret,stamp,raw):'0'.repeat(64);
+  const response=await fetch(url,{method:'POST',headers:{
+   'content-type':'application/json','x-temo-qa-timestamp':stamp,'x-temo-qa-auth':signature
+  },body:raw});
+  const text=await response.text();
+  return{code:response.status,raw:text,data:JSON.parse(text),headers:response.headers,stamp};
+ };
+ // Offline replay must retain the ORIGINAL immutable signed proof timestamps and hashes.
+ const immutableSource=event();
+ const first=await send(immutableSource);
+ assert.equal(first.code,200,first.raw);
+ assert.equal(first.data.receipt.d1CompanyId,1);
+ assert.equal(first.data.receipt.companyId,40);
+ assert.equal(first.data.receipt.erpDeliveryId,801);
+ assert.equal(first.data.receipt.d1DeliveryId,301);
+ assert.equal(first.headers.get('x-temo-qa-ack'),
+  requestMac(transportSecret,first.headers.get('x-temo-qa-ack-time'),first.raw));
+ const retry=await send(immutableSource);
+ assert.equal(retry.code,200,retry.raw);
+ assert.deepEqual(retry.data.receipt,first.data.receipt);
+ assert.equal(f.count('payments'),1);
+ assert.equal(f.count('credit_ledger'),2);
+ assert.equal(f.count('stock_movements'),2);
+ assert.equal(f.count('bottle_movements'),1);
+ assert.equal(f.count('driver_finance_bridge_receipts'),1);
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,18);
+ const wrongTenant=event();wrongTenant.source={...wrongTenant.source,companyId:2};
+ const bad=await send(wrongTenant);
+ assert.equal(bad.code,409);
+ assert.equal(bad.headers.get('x-temo-qa-ack'),null);
+ const unauth=await send(event(),false);
+ assert.equal(unauth.code,401);
+ assert.equal(f.count('payments'),1);
+ assert.equal(f.count('driver_finance_bridge_receipts'),1);
 });
