@@ -60,6 +60,8 @@ jobs:
         run: node --experimental-sqlite --test tests/erp-d1-admin-summary.integration.test.cjs
       - name: Cloudflare Workers D1 migration architecture contract and portability inventory
         run: node --test tests/cloudflare-d1-architecture.test.cjs
+      - name: TDD full pinned 114-table ERP baseline versus disposable D1 structural drift
+        run: node --experimental-sqlite --test tests/d1-erp-full-schema-preflight.test.mjs
       - name: Private local HTTPS staging TLS, login and ERP role-isolation smoke
         run: |
           node --test tests/private-https-staging-security.test.cjs
