@@ -190,7 +190,7 @@ test('TDD malformed FK metadata cannot be interpreted as a successful canonical 
  assert.equal((await response.json()).error,'qa_d1_schema_unavailable');
 });
 
-test('TDD pinned 64 UNIQUE and composite PK contracts match local ERP SQLite DDL',t=>{
+test('TDD pinned 66 UNIQUE and primary-key contracts match local ERP SQLite DDL',t=>{
  const {readFileSync}=require('node:fs'),{resolve}=require('node:path');
  const {extractPinnedErpBaseDdl,createDisposableErpSchema}=require('../services/d1-erp-full-schema-preflight.mjs');
  const {ERP_D1_BASE_UNIQUE_KEYS}=require('../services/d1-erp-base-unique-manifest-qa.mjs');
@@ -205,7 +205,7 @@ test('TDD pinned 64 UNIQUE and composite PK contracts match local ERP SQLite DDL
   assert.deepEqual(indexes,expected,name);
   count+=indexes.length;
  }
- assert.equal(count,64);
+ assert.equal(count,66);
 });
 test('TDD a 114-table QA replica missing users.username UNIQUE cannot assert complete ERP D1 schema',async t=>{
  const {readFileSync}=require('node:fs'),{resolve}=require('node:path');
