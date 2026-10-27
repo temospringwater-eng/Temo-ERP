@@ -37,7 +37,7 @@ test('TDD Cloudflare Worker D1 QA introspection with real SQLite reads schema ON
  assert.equal(body.qaOnly,true);
  assert.equal(body.financeCutoverAllowed,false);
  assert.equal(answer.headers.get('cache-control'),'no-store');
- assert.ok(f.audit.every(sql=>/^SELECT |^PRAGMA table_info\('/.test(sql)));
+ assert.ok(f.audit.every(sql=>/^SELECT |^PRAGMA (?:table_info|foreign_key_list)\('/.test(sql)));
  assert.match(f.audit[0],/^SELECT name FROM sqlite_master/);
  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS n FROM '+ERP_D1_CORE_TABLES[0]).get().n,0);
 });
@@ -108,7 +108,7 @@ test('TDD isolated D1 with all 114 base tables and required runtime tenant field
  assert.equal(r.criticalColumnGaps.length,0);
  assert.equal(r.financeCutoverAllowed,false,'only schema checks; no signed finance sync or deployment');
  assert.ok(f.audit.length>=114);
- assert.ok(f.audit.every(sql=>/^SELECT |^PRAGMA table_info\('/.test(sql)));
+ assert.ok(f.audit.every(sql=>/^SELECT |^PRAGMA (?:table_info|foreign_key_list)\('/.test(sql)));
  assert.equal(f.sqlite.prepare('SELECT total_changes() n').get().n,0);
 });
 test('TDD 114 table names with renamed users.active cannot pass full D1 base-column/tenant readiness',async t=>{
