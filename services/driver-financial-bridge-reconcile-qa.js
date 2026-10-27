@@ -14,6 +14,7 @@ async function reconcileAppliedBridgeReceiptQa(tx,{m,event,previous}){
  let recorded;
  try{recorded=JSON.parse(previous.result_json)}catch{stop()}
  if(recorded.status!=='applied'||recorded.companyId!==m.erp_company_id||
+    recorded.d1CompanyId!==s.companyId||
     recorded.erpDeliveryId!==m.erp_delivery_id||recorded.d1DeliveryId!==s.deliveryId||
     cents(recorded.amount)!==cents(event.payment.amount)||
     recorded.paymentId!==previous.payment_id)stop();
