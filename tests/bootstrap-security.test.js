@@ -79,3 +79,31 @@ test('legacy default passwords rotate on restart and stop working', async () => 
     assert.equal((await login(secure, 'admin', strongAdmin)).status, 200);
   } finally { await stop(secure); }
 });
+
+test('TDD hosted QA startup rejects missing strong credentials even with NODE_ENV=test',async()=>{
+ const proc=launch(path.join(dir,'isolated-qa.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1'});
+ await failsStartup(proc,/Super Admin is not provisioned/);
+});
+test('TDD hosted QA refuses normal production-like DB_PATH to prevent accidental mutation',async()=>{
+ const proc=launch(path.join(dir,'hayrila.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
+  TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD:strongSuper,
+  TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD:strongAdmin});
+ await failsStartup(proc,/QA-only database|hosted QA/i);
+});
+test('TDD hosted QA authenticates only strong bootstrap accounts; admin123 forbidden',async()=>{
+ const proc=launch(path.join(dir,'new-hosted-qa.db'),{NODE_ENV:'test',TEMO_ERP_HOSTED_QA:'1',
+  TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD:strongSuper,
+  TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD:strongAdmin});
+ try{
+  await waitForReady(proc);
+  assert.equal((await login(proc,'superadmin','admin123')).status,401);
+  assert.equal((await login(proc,'admin','admin123')).status,401);
+  assert.equal((await login(proc,'superadmin',strongSuper)).status,200);
+  assert.equal((await login(proc,'admin',strongAdmin)).status,200);
+ }finally{await stop(proc);}
+});
+test('TDD hosted QA startup source binds loopback only, never 0.0.0.0',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+ assert.match(source,/TEMO_ERP_HOSTED_QA/);
+ assert.match(source,/127\.0\.0\.1/);
+});
