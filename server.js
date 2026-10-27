@@ -21,6 +21,13 @@ const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = req
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
+const hostedQa = process.env.TEMO_ERP_HOSTED_QA === '1';
+// Hosted QA must be an isolated, loopback-only test service, never a normal ERP DB.
+if (hostedQa && (process.env.NODE_ENV !== 'test' ||
+    !/(?:^|[\\/])[^\\/]*qa[^\\/]*\.db$/i.test(dbPath) ||
+    path.resolve(dbPath) === path.resolve(__dirname, 'hayrila.db'))) {
+  throw new Error('Hosted QA requires a QA-only database and NODE_ENV=test');
+}
 const db = new sqlite3.Database(dbPath);
 
 // Metadata-first storage boundary: file bytes are handled by an external object-storage worker.
@@ -1928,7 +1935,7 @@ function initializeDatabase() {
       WHERE NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.company_id = p.company_id AND sm.reference = 'PURCHASE-' || p.id AND sm.product_id = pi.product_id)
     `);
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production' && !hostedQa) {
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT NULL, 'superadmin', ?, 'Platform Owner', 'super_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'superadmin')`, [hashPassword('admin123')]);
     db.run(`INSERT INTO users (company_id, username, password_hash, name, role) SELECT (SELECT id FROM companies ORDER BY id LIMIT 1), 'admin', ?, 'Company Admin', 'company_admin' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')`, [hashPassword('admin123')]);
     }
@@ -6627,7 +6634,7 @@ app.get('*', (req, res) => {
 });
 
 function startServer(port) {
-  const server = app.listen(port, () => {
+  const server = app.listen(port, hostedQa ? '127.0.0.1' : undefined, () => {
     console.log(`Hayrila starter running at http://localhost:${port}`);
   });
 
@@ -6651,7 +6658,7 @@ function startServer(port) {
  * credentials are rotated. Existing non-default passwords remain unchanged.
  */
 async function enforceProductionBootstrapCredentials() {
-  if (process.env.NODE_ENV !== 'production') return;
+  if (process.env.NODE_ENV !== 'production' && !hostedQa) return;
   const strong = (value, name) => {
     if (value === undefined || value === '') return null;
     if (typeof value !== 'string' || value.length < 16 ||
