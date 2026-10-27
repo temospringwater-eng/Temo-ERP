@@ -5,7 +5,7 @@ const {createDriverFinanceHttpQa,requestMac}=require('../services/driver-finance
 const transportSecret='transport-secret-separated-from-receipt-signature-2026';
 const proofSecret='proof-hmac-secret-is-independent-12345';
 const event={source:{companyId:1,deliveryId:301,idempotencyKey:'delivery-301-qa'},status:'completed'};
-function setup(post=async()=>({status:'applied',erpDeliveryId:801,d1DeliveryId:301,companyId:40,paymentId:991})){
+function setup(post=async()=>({status:'applied',erpDeliveryId:801,d1DeliveryId:301,d1CompanyId:1,companyId:40,paymentId:991})){
  const app=express(),calls=[];
  const signer=(stamp,body)=>requestMac(transportSecret,stamp,body);
  createDriverFinanceHttpQa({app,qaEnabled:true,nodeEnv:'test',dbPath:'/tmp/finance-test-qa.db',
@@ -29,6 +29,8 @@ test('TDD private QA endpoint signs authenticated success acknowledgement and re
  const a=await send(f);
  assert.equal(a.status,200,a.raw);
  assert.equal(a.data.receipt.erpDeliveryId,801);
+ assert.equal(a.data.receipt.d1CompanyId,1);
+ assert.equal(a.data.receipt.companyId,40);
  assert.equal(f.calls.length,1);
  assert.equal(a.headers.get('cache-control'),'no-store');
  const header=a.headers.get('x-temo-qa-ack');
@@ -64,4 +66,22 @@ test('TDD backend posting error reveals no sensitive SQL or credentials, never a
  assert.equal(v.status,409);
  assert.equal(v.headers.get('x-temo-qa-ack'),null);
  assert.doesNotMatch(v.raw,/SQL|secret|tenant_table/);
+});
+
+test('TDD signed HTTP ACK must reject a different D1 origin company even with valid transport HMAC',async t=>{
+ const f=await start(t,async()=>({status:'applied',erpDeliveryId:801,d1DeliveryId:301,d1CompanyId:2,companyId:40}));
+ const response=await send(f);
+ assert.equal(response.status,409);
+ assert.equal(response.headers.get('x-temo-qa-ack'),null);
+});
+test('TDD signed HTTP ACK must reject invalid ERP target company ID and missing source company',async t=>{
+ for(const receipt of [
+  {status:'applied',erpDeliveryId:801,d1DeliveryId:301,d1CompanyId:1,companyId:0},
+  {status:'applied',erpDeliveryId:801,d1DeliveryId:301,companyId:40},
+ ]){
+  const f=await start(t,async()=>receipt);
+  const response=await send(f);
+  assert.equal(response.status,409);
+  assert.equal(response.headers.get('x-temo-qa-ack'),null);
+ }
 });
