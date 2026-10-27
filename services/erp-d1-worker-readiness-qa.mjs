@@ -3,6 +3,7 @@
 // 11 driver core tables are NOT enough to claim central ERP schema compatibility.
 import {ERP_D1_BASE_TABLES} from './d1-erp-base-table-manifest-qa.mjs';
 import {ERP_D1_BASE_COLUMNS} from './d1-erp-base-column-manifest-qa.mjs';
+import {ERP_D1_BASE_FOREIGN_KEYS} from './d1-erp-base-fk-manifest-qa.mjs';
 export const ERP_D1_CORE_TABLES=Object.freeze([
  'companies','users','customers','products','orders','deliveries','payments',
  'credit_ledger','stock_movements','bottle_movements','driver_finance_outbox'
@@ -44,6 +45,26 @@ async function readTableInfo(db,name){
  }
  return columns;
 }
+async function readTableFkList(db,table){
+ if(!SAFE_NAME.test(table)||!Object.hasOwn(ERP_D1_BASE_FOREIGN_KEYS,table))
+  throw Error('unreviewed FK table identifier');
+ const r=await db.prepare("PRAGMA foreign_key_list('"+table+"')").all();
+ if(!Array.isArray(r?.results)||r.success===false)throw Error('invalid FK schema result');
+ const keys=[];
+ for(const entry of r.results){
+  if(!entry||!SAFE_NAME.test(entry.from)||!SAFE_NAME.test(entry.to)||
+   !SAFE_NAME.test(entry.table)||typeof entry.on_delete!=='string'||
+   !['NO ACTION','CASCADE','RESTRICT','SET NULL','SET DEFAULT'].includes(entry.on_delete)||
+   !Number.isSafeInteger(entry.id)||entry.id<0||
+   !Number.isSafeInteger(entry.seq)||entry.seq!==0)
+   throw Error('untrusted FK schema metadata');
+  keys.push({from:entry.from,table:entry.table,to:entry.to,onDelete:entry.on_delete});
+ }
+ const keyOf=k=>JSON.stringify(k);
+ if(new Set(keys.map(keyOf)).size!==keys.length)
+  throw Error('duplicate FK metadata');
+ return keys;
+}
 export function createErpD1QaReadinessHandler(){
  return async function handle(request,env){
   if(!request||!env||env.TEMO_ERP_D1_QA_MODE!=='1'||
@@ -72,7 +93,7 @@ export function createErpD1QaReadinessHandler(){
    const names=new Set(list);
    const missingCore=ERP_D1_CORE_TABLES.filter(name=>!names.has(name));
    const missing=ERP_D1_BASE_TABLES.filter(name=>!names.has(name));
-   const baseColumnGaps=[],criticalColumnGaps=[];
+   const baseColumnGaps=[],criticalColumnGaps=[],baseFkGaps=[];
    const inspected=new Map();
    for(const table of ERP_D1_BASE_TABLES){
     if(!names.has(table))continue;
@@ -88,6 +109,14 @@ export function createErpD1QaReadinessHandler(){
       missingFields.push(column);
     }
     if(missingFields.length)baseColumnGaps.push({table,fields:missingFields});
+    const expectedFk=ERP_D1_BASE_FOREIGN_KEYS[table];
+    if(!Array.isArray(expectedFk))throw Error('missing pinned base FK contract');
+    const actualFk=await readTableFkList(env.DB,table);
+    const expectedSet=new Set(expectedFk.map(JSON.stringify)),actualSet=new Set(actualFk.map(JSON.stringify));
+    const missingFks=expectedFk.filter(fk=>!actualSet.has(JSON.stringify(fk)));
+    const unexpectedFks=actualFk.filter(fk=>!expectedSet.has(JSON.stringify(fk)));
+    if(missingFks.length||unexpectedFks.length)
+     baseFkGaps.push({table,missing:missingFks,unexpected:unexpectedFks});
    }
    for(const [table,fields] of Object.entries(CORE_COLUMNS)){
     if(!names.has(table))continue;
@@ -96,15 +125,16 @@ export function createErpD1QaReadinessHandler(){
     if(absent.length)criticalColumnGaps.push({table,fields:absent});
    }
    const baseSchemaNameAndColumnReady=missing.length===0&&baseColumnGaps.length===0;
+   const baseFkReady=baseFkGaps.length===0;
    const coreSchemaReady=missingCore.length===0;
    // Additional runtime ALTERs, FKs, indexes, tenant mappings and actual
    // Worker deployment still have separate release gates. This never flips posting.
-   const canonicalSchemaReady=baseSchemaNameAndColumnReady&&coreSchemaReady&&
+   const canonicalSchemaReady=baseSchemaNameAndColumnReady&&baseFkReady&&coreSchemaReady&&
       criticalColumnGaps.length===0;
    return json({qaOnly:true,coreSchemaReady,baseSchemaNameAndColumnReady,
     canonicalSchemaReady,tableCount:names.size,expectedErpBaseTables:114,
     missingTables:missing,missingCoreTables:missingCore,
-    baseColumnGaps,criticalColumnGaps,
+    baseColumnGaps,baseFkReady,baseFkGaps,criticalColumnGaps,
     financeCutoverAllowed:false,productionReady:false},200);
   }catch{
    return json({error:'qa_d1_schema_unavailable'},503);
