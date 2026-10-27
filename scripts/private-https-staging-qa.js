@@ -92,7 +92,7 @@ async function main() {
     assert.equal(openssl.status, 0, 'OpenSSL staging certificate setup failed');
     child = spawn(process.execPath, ['server.js'], {
       cwd: path.join(__dirname, '..'), stdio: ['ignore', 'ignore', 'pipe'],
-      env: { ...process.env, NODE_ENV: 'production', DB_PATH: path.join(dir, 'staging.db'),
+      env: { ...process.env, NODE_ENV: 'test', TEMO_ERP_HOSTED_QA: '1', DB_PATH: path.join(dir, 'staging-qa.db'),
         PORT: String(backendPort),
         TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD: superPassword,
         TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD: companyPassword }
