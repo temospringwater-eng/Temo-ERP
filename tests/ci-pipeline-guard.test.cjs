@@ -24,3 +24,11 @@ test('TDD: ERP CI must prove disposable SQLite backup/restore without live-data 
   'Require isolated backup and restore drill in ERP CI');
  assert.ok(!yaml.includes('hayrila.db'),'CI must never read a tracked production-like ERP database');
 });
+
+test('TDD: full ERP regression MUST run after merge onto main, not PR only',()=>{
+ assert.match(yaml,/^  push:\s*\n\s+branches:\s*\[main\]/m,
+  'Merged main must run the same full unit/integration test workflow before claiming QA green');
+ assert.match(yaml,/^  pull_request:/m,'Pre-merge PR validation still required');
+ assert.match(yaml,/"services\/\*\*"/,'Production services must stay in CI path gate');
+ assert.match(yaml,/"tests\/\*\*"/,'Unit and integration tests must stay in CI path gate');
+});
