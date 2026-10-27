@@ -7,6 +7,9 @@ on:
       - 'scripts/erp-114-wrangler-native-local.mjs'
       - 'tests/d1-erp-wrangler-local.test.mjs'
       - 'tests/d1-erp-full-schema-preflight.test.mjs'
+      - 'worker/erp-d1-qa-readiness-worker.mjs'
+      - 'scripts/erp-qa-readiness-wrangler-local.mjs'
+      - 'tests/erp-d1-qa-worker-local.integration.test.mjs'
       - 'services/d1-erp-107-table-local-rehearsal.mjs'
       - 'tests/d1-erp-107-table-local-rehearsal.test.mjs'
       - '.github/workflows/erp-full-native-d1-local-qa.yml'
@@ -18,6 +21,9 @@ on:
       - 'scripts/erp-114-wrangler-native-local.mjs'
       - 'tests/d1-erp-wrangler-local.test.mjs'
       - 'tests/d1-erp-full-schema-preflight.test.mjs'
+      - 'worker/erp-d1-qa-readiness-worker.mjs'
+      - 'scripts/erp-qa-readiness-wrangler-local.mjs'
+      - 'tests/erp-d1-qa-worker-local.integration.test.mjs'
       - '.github/workflows/erp-full-native-d1-local-qa.yml'
 permissions:
   contents: read
@@ -40,3 +46,5 @@ jobs:
           echo "TEMO_WRANGLER_BINARY=$RUNNER_TEMP/temo-d1-local-gate/node_modules/.bin/wrangler" >> "$GITHUB_ENV"
       - name: Execute full pinned ERP 114-table schema against disposable native Wrangler D1 LOCAL
         run: node scripts/erp-114-wrangler-native-local.mjs
+      - name: Launch isolated native Cloudflare Worker on loopback and smoke secured D1 readiness
+        run: node scripts/erp-qa-readiness-wrangler-local.mjs

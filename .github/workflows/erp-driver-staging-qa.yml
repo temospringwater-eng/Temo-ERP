@@ -57,7 +57,7 @@ jobs:
       - name: Production bootstrap fail-closed security regression
         run: timeout -k 5s 100s node --test --test-force-exit tests/bootstrap-security.test.js
       - name: Workers D1 company-scoped ERP read-only unit/integration QA
-        run: node --experimental-sqlite --test tests/erp-d1-admin-summary.integration.test.cjs tests/erp-d1-read-alias-qa.integration.test.mjs
+        run: node --experimental-sqlite --test tests/erp-d1-admin-summary.integration.test.cjs tests/erp-d1-read-alias-qa.integration.test.mjs tests/erp-d1-qa-worker-local.integration.test.mjs
       - name: Cloudflare Workers D1 migration architecture contract and portability inventory
         run: node --test tests/cloudflare-d1-architecture.test.cjs
       - name: TDD full pinned 114-table ERP baseline versus disposable D1 structural drift
