@@ -117,6 +117,6 @@ For each phase report: `Phase | Done/Active/Blocked | exact PR/CI evidence | roo
 
 ### Current checkpoint — Phase 1 (active)
 - Secure hosted QA startup guard (strong bootstrap credentials, loopback-only, QA-specific DB path) merged: ERP PR #32.
-- Disposable hosted QA SQLite restart/persistence test under review: ERP PR #33. Do not mark this test done without green CI.
+- Hosted QA SQLite restart, strong credentials and non-duplicate privileged account integration tests **passed** and were merged in ERP PR #33; merged-main full regression passed: https://github.com/temospringwater-eng/Temo-ERP/actions/runs/40455314624 . Actual persistent cloud QA host is still unprovisioned.
 - Next safe task: procure/attach **isolated private QA host** with persistent disk, HTTPS tunnel/access control, secret manager and verified backups. Do not run existing `hayrila.db` on QA or activate live D1 finance sync.
 - `Step 8: Production Go-Live` remains pending; **zero live customer financial receipts synchronized**.
