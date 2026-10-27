@@ -291,3 +291,58 @@ test('TDD full signed D1→ERP private HTTP bridge posts once, ACK maps D1 compa
  assert.equal(f.count('payments'),1);
  assert.equal(f.count('driver_finance_bridge_receipts'),1);
 });
+
+test('TDD integration: posted signed delivery is independently reconciled across ERP cash, invoice, stock and bottles before offline ACK replay',async t=>{
+ const {auditCrossSystemDelivery}=require('../services/driver-finance-crosswalk-qa');
+ const f=fixture();t.after(f.close);
+ const d1=new DatabaseSync(':memory:');t.after(()=>d1.close());
+ d1.exec([
+  'CREATE TABLE deliveries(id INTEGER,company_id INTEGER,driver_id INTEGER,order_id INTEGER,status TEXT)',
+  'CREATE TABLE driver_delivery_completions(delivery_id INTEGER,company_id INTEGER,driver_id INTEGER,amount REAL,returned_count INTEGER,empty_count INTEGER,proof_key TEXT)',
+  'CREATE TABLE driver_delivery_evidence(delivery_id INTEGER,company_id INTEGER,driver_id INTEGER,signature_key TEXT,photo_key TEXT,latitude REAL,longitude REAL,accuracy_m REAL)'
+ ].join(';')+';');
+ const signedEvent=event(),src=signedEvent.source;
+ d1.prepare('INSERT INTO deliveries VALUES(?,?,?,?,?)').run(
+  src.deliveryId,src.companyId,src.driverId,src.orderId,'completed');
+ d1.prepare('INSERT INTO driver_delivery_completions VALUES(?,?,?,?,?,?,?)').run(
+  src.deliveryId,src.companyId,src.driverId,signedEvent.payment.amount,
+  signedEvent.returnedCount,signedEvent.emptyCount,signedEvent.proof.signature.storageKey);
+ d1.prepare('INSERT INTO driver_delivery_evidence VALUES(?,?,?,?,?,?,?,?)').run(
+  src.deliveryId,src.companyId,src.driverId,signedEvent.proof.signature.storageKey,
+  signedEvent.proof.photo.storageKey,signedEvent.proof.gps.latitude,
+  signedEvent.proof.gps.longitude,signedEvent.proof.gps.accuracyMeters);
+ const mapping={d1Company:1,d1Driver:11,d1Order:201,d1Delivery:301,
+  erpCompany:40,erpDriver:41,erpOrder:701,erpDelivery:801};
+ const before=auditCrossSystemDelivery({d1,erp:f.db,mapping});
+ assert.equal(before.comparisonPassed,false,'ledger reconciliation cannot pass before ERP posting');
+ assert.ok(before.issues.includes('ERP_DELIVERY_SCOPE_MISMATCH'));
+ const signed=signBridgeEvent(secret,signedEvent);
+ const posted=await f.service.post({event:signedEvent,signature:signed});
+ assert.equal(posted.status,'applied');
+ assert.equal(posted.companyId,mapping.erpCompany);
+ assert.equal(posted.d1CompanyId,mapping.d1Company);
+ const noMutationBefore=Number(f.db.prepare('SELECT total_changes() n').get().n);
+ const matched=auditCrossSystemDelivery({d1,erp:f.db,mapping});
+ assert.deepEqual(matched.issues,[],'all posted money, invoice, stock, bottle and evidence must reconcile');
+ assert.equal(matched.comparisonPassed,true);
+ assert.equal(matched.ready,false,'QA reconciliation never enables live financial posting');
+ assert.equal(Number(f.db.prepare('SELECT total_changes() n').get().n),noMutationBefore);
+ const replay=await f.service.post({event:signedEvent,signature:signed});
+ assert.deepEqual(replay,posted,'lost ACK replay must return original finance receipt');
+ const identical=auditCrossSystemDelivery({d1,erp:f.db,mapping});
+ assert.equal(identical.comparisonPassed,true);
+ assert.equal(f.count('payments'),1);
+ assert.equal(f.count('stock_movements'),2);
+ f.db.prepare("UPDATE stock_movements SET quantity=quantity+1 WHERE company_id=40 AND product_id=51").run();
+ const damaged=auditCrossSystemDelivery({d1,erp:f.db,mapping});
+ assert.ok(damaged.issues.includes('ERP_STOCK_LEDGER_QUANTITY_MISMATCH'));
+ assert.equal(damaged.comparisonPassed,false);
+ await assert.rejects(f.service.post({event:signedEvent,signature:signed}),
+  /reconciliation|required|differs/i,'replay must never ACK altered ERP stock ledger');
+ f.db.prepare("UPDATE stock_movements SET quantity=quantity-1 WHERE company_id=40 AND product_id=51").run();
+ f.db.prepare("UPDATE delivery_bottle_counts SET returned_quantity=5 WHERE company_id=40 AND delivery_id=801").run();
+ const wrongBottle=auditCrossSystemDelivery({d1,erp:f.db,mapping});
+ assert.ok(wrongBottle.issues.includes('ERP_BOTTLE_LEDGER_MISMATCH'));
+ await assert.rejects(f.service.post({event:signedEvent,signature:signed}),
+  /reconciliation|required|differs/i,'replay must never ACK altered bottle ledger');
+});
