@@ -30,7 +30,7 @@
 ## C. Final execution order — mandatory gates
 
 ### Phase 0 — Stable baseline and freeze
-**Priority: P0; status: start here.**
+**Priority: P0; status: completed — mandatory ERP/Driver merged-main CI green; known Cloudflare 404 explicitly deferred to Phase 4.**
 - Freeze new nonessential feature requests until real delivery, inventory and finance sync are stable.
 - Inventory open ERP/Driver PRs, current main SHA, QA failing checks, migrations, cloud runtime versions and expected API contracts.
 - Repair blocking CI/runner/source mismatch errors. Compare Cloudflare *active deployment ID* with most recent uploaded preview; do not infer that upload equals deployment.
@@ -38,7 +38,7 @@
 **Done only when:** mandatory ERP and Driver unit + integration and Android QA checks green on current baseline, no unexplained 404 or undisclosed merge blocker; report actual active deployment.
 
 ### Phase 1 — Isolated central ERP QA hosting + disaster recovery
-**Priority: P0. Depends on Phase 0.**
+**Priority: P0; status: active — secure localhost QA bootstrap merged; private HTTPS host and durable QA disk provisioning pending. Depends on Phase 0.**
 - Provision private HTTPS **QA** ERP host and isolated SQLite database with durable disk, login/secret management, restricted service endpoint and no public access to finance bridge.
 - Run ERP schema check, test data seed, backup, restore and rollback drills; document environment, SSL and health evidence.
 - Create separate production backup/restore plan; do not migrate normal `hayrila.db` or post real finance in this phase.
@@ -109,5 +109,14 @@
 
 For each phase report: `Phase | Done/Active/Blocked | exact PR/CI evidence | root blocker | next safe action | gate criteria`. Never use invented percent-complete for real sync. Advance to the next phase only when the prior exit gate is verified. If a phase fails, fix and retest there rather than adding features.
 
-### Starting checkpoint
-**Next task:** Phase 0 — verify current ERP/Driver main CI, Cloudflare *active* version and endpoint matrix, resolve blocker list. Then Phase 1 isolated ERP QA hosting. `Step 8: Production Go-Live` remains pending, and live customer finance synchronization remains disabled.
+### Phase 0 verified completion checkpoint (27 October 2026)
+- ERP main regression and restore gate **passed**: https://github.com/temospringwater-eng/Temo-ERP/actions/runs/40453783105
+- Driver merged-main native Android JUnit + SQLite + emulator QA **passed**: https://github.com/babar200/TEMO-Driver-Android-QA/actions/runs/40454178075
+- Phase 0 main-CI fixes merged in ERP PR #30 and Driver PR #63; full blocker register in [Phase 0 evidence report](TEMO-PHASE0-VERIFIED-BASELINE.md).
+- The active Cloudflare delivery-policy HTTP 404 is **explained** by active-vs-uploaded version mismatch, not fixed or released; promotion belongs to Phase 4 after isolated finance sync testing and rollback. Open legacy OTP PRs remain frozen.
+
+### Current checkpoint — Phase 1 (active)
+- Secure hosted QA startup guard (strong bootstrap credentials, loopback-only, QA-specific DB path) merged: ERP PR #32.
+- Disposable hosted QA SQLite restart/persistence test under review: ERP PR #33. Do not mark this test done without green CI.
+- Next safe task: procure/attach **isolated private QA host** with persistent disk, HTTPS tunnel/access control, secret manager and verified backups. Do not run existing `hayrila.db` on QA or activate live D1 finance sync.
+- `Step 8: Production Go-Live` remains pending; **zero live customer financial receipts synchronized**.
