@@ -29,7 +29,7 @@ function fixture(t,{full=false}={}){
  const statements=[];
  const DB={prepare(statement){
   statements.push(statement);
-  assert.ok(statement.startsWith('SELECT ')||statement.startsWith("PRAGMA table_info('"),
+  assert.ok(statement.startsWith('SELECT ')||/^PRAGMA (?:table_info|foreign_key_list|index_list|index_info)\('/.test(statement),
    'D1 worker cannot mutate private SQL: '+statement.slice(0,80));
   return {async all(){return{success:true,results:sql.prepare(statement).all()}}};
  }};
@@ -79,5 +79,5 @@ test('TDD isolated 114-table ERP plus runtime-owned columns clears schema only; 
  assert.equal(body.financeCutoverAllowed,false);
  assert.equal(body.productionReady,false);
  assert.equal(f.sql.prepare('SELECT total_changes() AS n').get().n,before);
- assert.ok(f.statements.every(s=>/^SELECT |^PRAGMA table_info\('/.test(s)));
+ assert.ok(f.statements.every(s=>/^SELECT |^PRAGMA (?:table_info|foreign_key_list|index_list|index_info)\('/.test(s)));
 });
