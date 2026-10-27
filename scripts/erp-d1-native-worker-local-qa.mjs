@@ -84,7 +84,9 @@ export async function runNativeErpD1WorkerQa({binary=process.env.TEMO_WRANGLER_B
    'worker/erp-d1-stage1-qa.mjs',
    'services/erp-d1-worker-readiness-qa.mjs',
    'services/d1-erp-base-table-manifest-qa.mjs',
-   'services/d1-erp-base-column-manifest-qa.mjs'
+   'services/d1-erp-base-column-manifest-qa.mjs',
+   'services/d1-erp-base-fk-manifest-qa.mjs',
+   'services/d1-erp-base-unique-manifest-qa.mjs'
   ])copyFileSync(new URL('../'+path,import.meta.url),join(scratch,path));
   writeFileSync(config,isolatedConfig(),{mode:0o600,flag:'wx'});
   writeFileSync(sql,syntheticSql(source),{mode:0o600,flag:'wx'});
