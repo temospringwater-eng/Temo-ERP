@@ -52,6 +52,21 @@ async function applyVerifiedBridgeReceipt(tx,event,digest){
   if(!pos(m.erp_bottle_id)||!await tx.get('SELECT id FROM bottles WHERE id=? AND company_id=? AND active=1',m.erp_bottle_id,m.erp_company_id))
    fail('ERP bottle mapping invalid or foreign');
  }
- return postLedger(tx,{m,event,items,customer,orderTotal,reference,digest});
+ // First-post ACK must be reconciled while BEGIN IMMEDIATE still owns the ledger.
+ // Otherwise a successful INSERT silently corrupted by an accounting trigger could
+ // commit and return 'applied'; checking only on lost-ACK retries is too late.
+ const posted=await postLedger(tx,{m,event,items,customer,orderTotal,reference,digest});
+ const persisted=await tx.get(
+  'SELECT * FROM driver_finance_bridge_receipts WHERE d1_company_id=? AND d1_delivery_id=?',
+  s.companyId,s.deliveryId);
+ if(!persisted||persisted.event_sha256!==digest||
+    persisted.source_key!==s.idempotencyKey||
+    Number(persisted.company_id)!==Number(m.erp_company_id)||
+    Number(persisted.erp_delivery_id)!==Number(m.erp_delivery_id))
+  fail('initial ERP finance receipt persistence mismatch');
+ const checked=await reconcileAppliedBridgeReceiptQa(tx,{m,event,previous:persisted});
+ if(JSON.stringify(checked)!==JSON.stringify(posted))
+  fail('initial ERP financial ACK differs from reconciled ledgers');
+ return posted;
 }
 module.exports={applyVerifiedBridgeReceipt};
