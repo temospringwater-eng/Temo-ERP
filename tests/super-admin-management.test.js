@@ -3,11 +3,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const net = require('node:net');
 const { spawn } = require('node:child_process');
 
-const port = 34700 + (process.pid % 200);
+let port;
 const databasePath = path.join(os.tmpdir(), `temo-admin-${process.pid}.db`);
 let serverProcess;
+
+async function findAvailablePort() {
+  const probe = net.createServer();
+  await new Promise((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', resolve);
+  });
+  const { port: availablePort } = probe.address();
+  await new Promise((resolve, reject) => {
+    probe.close((error) => error ? reject(error) : resolve());
+  });
+  return availablePort;
+}
 
 async function request(route, options = {}) {
   const response = await fetch(`http://127.0.0.1:${port}${route}`, {
@@ -30,7 +44,7 @@ async function login(username, password) {
 }
 
 async function waitForServer() {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       const response = await request('/readiness');
       if (response.status === 200 && response.json.ready) return;
@@ -41,6 +55,7 @@ async function waitForServer() {
 }
 
 test.before(async () => {
+  port = await findAvailablePort();
   serverProcess = spawn(process.execPath, ['server.js'], {
     cwd: path.join(__dirname, '..'),
     env: { ...process.env, PORT: String(port), DB_PATH: databasePath },
