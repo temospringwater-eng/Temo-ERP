@@ -10,7 +10,7 @@ mkdir -p backups
 npx wrangler d1 export temo_erp_qa_db --remote --output backups/temo_erp_qa_db-$(date -u +%Y%m%dT%H%M%SZ).sql
 sha256sum backups/*.sql > backups/SHA256SUMS
 ```
-`backups/` is git-ignored; keep exports there and do not stage them. Restore drill: `npx wrangler d1 create temo_erp_restore_drill` then `npx wrangler d1 execute temo_erp_restore_drill --remote --file=<backup.sql>` and compare table row counts. (Export blocks writes briefly on the DB.)
+`backups/` is git-ignored; keep exports there and do not stage them. Restore drill: `npx wrangler d1 create temo_erp_restore_drill` then `npx wrangler d1 execute temo_erp_restore_drill --remote --file=<backups/exported-file.sql>` and compare table row counts. (Export blocks writes briefly on the DB.)
 
 ## Read-only schema comparison (SELECT/PRAGMA only)
 ```
