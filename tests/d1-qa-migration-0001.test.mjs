@@ -40,3 +40,17 @@ test('applies idempotently, matches ERP columns, preserves data, isolates compan
  assert.equal(tables(db).length,tb);
  assert.equal(db.prepare('SELECT COUNT(*) n FROM companies').get().n,before);
 });
+test('foreign keys, unique constraints and indexes match canonical ERP server.js',()=>{
+ const {full,db}=qa();db.exec(up);
+ const fk=(d,t)=>d.prepare(`PRAGMA foreign_key_list(${t})`).all().map(r=>[r.from,r.table,r.to].join('>')).sort();
+ const uq=(d,t)=>d.prepare(`PRAGMA index_list(${t})`).all().filter(i=>i.unique).map(i=>d.prepare(`PRAGMA index_info(${i.name})`).all().map(c=>c.name).join(',')).sort();
+ for(const t of NEW){assert.deepEqual(fk(db,t),fk(full,t),'FK '+t);assert.deepEqual(uq(db,t),uq(full,t),'UNIQUE '+t);}
+ const server=readFileSync(new URL('../server.js',import.meta.url),'utf8');
+ const erpIdx=[...server.matchAll(/CREATE INDEX IF NOT EXISTS (\w+)\s+ON (\w+)\(([^)]*)\)/g)].filter(m=>NEW.includes(m[2]));
+ assert.ok(erpIdx.length>=8);
+ for(const [,name,table,c] of erpIdx){
+  const row=db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name=?").get(name);
+  assert.ok(row,'missing index '+name);
+  assert.ok(row.sql.replace(/\s+/g,'').includes(`${table}(${c})`.replace(/\s+/g,'')),name);
+ }
+});
