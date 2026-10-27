@@ -8,6 +8,9 @@ on:
       - "tests/**"
       - "migrations/**"
       - "package*.json"
+      - "scripts/cloudflare-d1-portability-audit.cjs"
+      - "docs/TEMO-ERP-DRIVER-MASTER-PLAN.md"
+      - "docs/CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md"
       - "scripts/private-https-staging-qa.js"
       - ".github/workflows/erp-driver-staging-qa.yml"
   push:
@@ -19,6 +22,9 @@ on:
       - "tests/**"
       - "migrations/**"
       - "package*.json"
+      - "scripts/cloudflare-d1-portability-audit.cjs"
+      - "docs/TEMO-ERP-DRIVER-MASTER-PLAN.md"
+      - "docs/CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md"
       - "scripts/private-https-staging-qa.js"
       - ".github/workflows/erp-driver-staging-qa.yml"
   workflow_dispatch:
@@ -48,6 +54,8 @@ jobs:
         run: node --test tests/ci-pipeline-guard.test.cjs tests/source-integrity.test.cjs
       - name: Production bootstrap fail-closed security regression
         run: timeout -k 5s 100s node --test --test-force-exit tests/bootstrap-security.test.js
+      - name: Cloudflare Workers D1 migration architecture contract and portability inventory
+        run: node --test tests/cloudflare-d1-architecture.test.cjs
       - name: Private local HTTPS staging TLS, login and ERP role-isolation smoke
         run: |
           node --test tests/private-https-staging-security.test.cjs
