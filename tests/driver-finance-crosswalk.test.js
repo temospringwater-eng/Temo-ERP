@@ -7,11 +7,11 @@ const map={d1Company:1,d1Driver:11,d1Order:201,d1Delivery:301,
 function fixture(){
  const d1=new DatabaseSync(':memory:'),erp=new DatabaseSync(':memory:');
  d1.exec("CREATE TABLE deliveries(id INTEGER,company_id INTEGER,driver_id INTEGER,order_id INTEGER,status TEXT);"+
- "CREATE TABLE driver_delivery_completions(delivery_id INTEGER,company_id INTEGER,amount REAL,returned_count INTEGER,empty_count INTEGER,proof_key TEXT);"+
- "CREATE TABLE driver_delivery_evidence(delivery_id INTEGER,signature_key TEXT,photo_key TEXT,latitude REAL,longitude REAL,accuracy_m REAL);"+
+ "CREATE TABLE driver_delivery_completions(delivery_id INTEGER,company_id INTEGER,driver_id INTEGER,amount REAL,returned_count INTEGER,empty_count INTEGER,proof_key TEXT);"+
+ "CREATE TABLE driver_delivery_evidence(delivery_id INTEGER,company_id INTEGER,driver_id INTEGER,signature_key TEXT,photo_key TEXT,latitude REAL,longitude REAL,accuracy_m REAL);"+
  "INSERT INTO deliveries VALUES(301,1,11,201,'completed');"+
- "INSERT INTO driver_delivery_completions VALUES(301,1,150,2,1,'sig-301');"+
- "INSERT INTO driver_delivery_evidence VALUES(301,'sig-301','photo-301',24.7,46.6,15);");
+ "INSERT INTO driver_delivery_completions VALUES(301,1,11,150,2,1,'sig-301');"+
+ "INSERT INTO driver_delivery_evidence VALUES(301,1,11,'sig-301','photo-301',24.7,46.6,15);");
  erp.exec("CREATE TABLE deliveries(id INTEGER,company_id INTEGER,driver_id INTEGER,order_id INTEGER,status TEXT,collected_amount REAL,bottle_return_count INTEGER,empty_count INTEGER);"+
  "CREATE TABLE payments(id INTEGER,company_id INTEGER,delivery_id INTEGER,order_id INTEGER,amount REAL);"+
  "CREATE TABLE delivery_bottle_counts(company_id INTEGER,delivery_id INTEGER,returned_quantity INTEGER,empty_quantity INTEGER);"+
@@ -53,5 +53,34 @@ test('TDD integration: matching amounts never implies production readiness witho
   const r=auditCrossSystemDelivery({...f,mapping:map});
   assert.equal(r.ready,false);
   assert.ok(r.issues.includes('ERP_STOCK_LEDGER_UNVERIFIED'));
+ }finally{f.close()}
+});
+
+test('TDD cross-tenant proof cannot satisfy a company 1 delivery even if delivery ID and signature match',()=>{
+ const f=fixture();try{
+  f.d1.exec("DELETE FROM driver_delivery_evidence WHERE company_id=1");
+  f.d1.exec("INSERT INTO driver_delivery_evidence VALUES(301,2,22,'sig-301','photo-301',24.7,46.6,15)");
+  const report=auditCrossSystemDelivery({...f,mapping:map});
+  assert.equal(report.ready,false);
+  assert.ok(report.issues.includes('D1_PROOF_INCOMPLETE'));
+ }finally{f.close()}
+});
+test('TDD wrong driver on completion/proof denies source receipt despite matching company and delivery',()=>{
+ const f=fixture();try{
+  f.d1.exec("UPDATE driver_delivery_completions SET driver_id=22 WHERE delivery_id=301");
+  let report=auditCrossSystemDelivery({...f,mapping:map});
+  assert.ok(report.issues.includes('D1_COMPLETION_SCOPE_MISMATCH'));
+  f.d1.exec("UPDATE driver_delivery_completions SET driver_id=11 WHERE delivery_id=301");
+  f.d1.exec("UPDATE driver_delivery_evidence SET driver_id=22 WHERE delivery_id=301");
+  report=auditCrossSystemDelivery({...f,mapping:map});
+  assert.ok(report.issues.includes('D1_PROOF_INCOMPLETE'));
+ }finally{f.close()}
+});
+test('TDD matching tenant proof remains valid: errors limited to absent finance posting',()=>{
+ const f=fixture();try{
+  const r=auditCrossSystemDelivery({...f,mapping:map});
+  assert.equal(r.issues.includes('D1_PROOF_INCOMPLETE'),false);
+  assert.equal(r.issues.includes('D1_COMPLETION_SCOPE_MISMATCH'),false);
+  assert.equal(r.ready,false);
  }finally{f.close()}
 });
