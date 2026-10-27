@@ -4,42 +4,40 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const net = require('node:net');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'temo-bootstrap-test-'));
 const strongSuper = 'CI-Only-Strong-Super-2026!';
 const strongAdmin = 'CI-Only-Strong-Admin-2026!';
-const reservedPorts = new Set();
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.once('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
-      srv.close(() => (reservedPorts.has(port) ? freePort().then(resolve, reject) : (reservedPorts.add(port), resolve(port))));
-    });
-  });
-}
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 async function launch(database, overrides = {}) {
-  const port = await freePort();
-  const env = { ...process.env, NODE_ENV: 'production', DB_PATH: database, PORT: String(port) };
+  const env = { ...process.env, NODE_ENV: 'production', DB_PATH: database, PORT: '0' };
   delete env.TEMO_BOOTSTRAP_SUPERADMIN_PASSWORD;
   delete env.TEMO_BOOTSTRAP_COMPANY_ADMIN_PASSWORD;
   Object.assign(env, overrides);
-  const child = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env, stdio: ['ignore', 'ignore', 'pipe'] });
+  const child = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
   let stderr = '';
+  child.stdout.on('data', (part) => { stdout += part.toString(); });
   child.stderr.on('data', (part) => { stderr += part.toString(); });
-  return { child, port, errors: () => stderr };
+  return {
+    child,
+    get port() {
+      const match = stdout.match(/Hayrila starter running at http:\/\/localhost:(\d+)/);
+      return match ? Number(match[1]) : 0;
+    },
+    errors: () => stderr
+  };
 }
 
 async function waitForReady(proc) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (proc.child.exitCode !== null) throw new Error('Startup failed: ' + proc.errors());
     try {
-      const response = await fetch('http://127.0.0.1:' + proc.port + '/readiness');
-      if (response.ok && (await response.json()).ready) return;
+      if (proc.port) {
+        const response = await fetch('http://127.0.0.1:' + proc.port + '/readiness');
+        if (response.ok && (await response.json()).ready) return;
+      }
     } catch (_) { /* startup not complete */ }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }

@@ -14,6 +14,18 @@ on:
       - "docs/CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md"
       - "scripts/private-https-staging-qa.js"
       - ".github/workflows/erp-driver-staging-qa.yml"
+      - "*.db"
+      - "**/*.db"
+      - "*.db-*"
+      - "**/*.db-*"
+      - "*.sqlite"
+      - "**/*.sqlite"
+      - "*.sqlite-*"
+      - "**/*.sqlite-*"
+      - "*.sqlite3"
+      - "**/*.sqlite3"
+      - "*.sqlite3-*"
+      - "**/*.sqlite3-*"
   push:
     branches: [main]
     paths:
@@ -29,6 +41,18 @@ on:
       - "docs/CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md"
       - "scripts/private-https-staging-qa.js"
       - ".github/workflows/erp-driver-staging-qa.yml"
+      - "*.db"
+      - "**/*.db"
+      - "*.db-*"
+      - "**/*.db-*"
+      - "*.sqlite"
+      - "**/*.sqlite"
+      - "*.sqlite-*"
+      - "**/*.sqlite-*"
+      - "*.sqlite3"
+      - "**/*.sqlite3"
+      - "*.sqlite3-*"
+      - "**/*.sqlite3-*"
   workflow_dispatch:
 permissions:
   contents: read

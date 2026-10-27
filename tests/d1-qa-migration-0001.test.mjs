@@ -6,11 +6,29 @@ import {extractPinnedErpBaseDdl,createDisposableErpSchema} from '../services/d1-
 const rd=f=>readFileSync(new URL('../migrations/d1-qa/'+f,import.meta.url),'utf8');
 const up=rd('0001_erp_sales_finance_stock_sync_additive.sql'),down=rd('0001_rollback_DISPOSABLE_ONLY.sql');
 const NEW=['sales','sale_items','warehouses','stock_movements','bottles','bottle_movements','credit_ledger','offline_sync_operations'];
+// Mirrors applicable ensureColumn additions, including the legacy tenant-column loop.
+const RUNTIME_COLUMNS=[
+ ['sales','company_id','INTEGER'],['sale_items','company_id','INTEGER'],
+ ['sales','customer_id','INTEGER'],['sales','salesman_id','INTEGER'],
+ ['sales','created_by','INTEGER'],['sales','invoice_number',"TEXT DEFAULT ''"],
+ ['sales','status',"TEXT DEFAULT 'pending'"],['sales','discount','REAL DEFAULT 0'],
+ ['sales','tax','REAL DEFAULT 0'],['sales','due_date','TEXT'],
+ ['bottles','qr_code',"TEXT DEFAULT ''"],['bottles','barcode',"TEXT DEFAULT ''"],
+ ['bottles','bottle_identifier',"TEXT DEFAULT ''"],
+ ['bottle_movements','driver_id','INTEGER'],['bottle_movements','warehouse_id','INTEGER']
+];
 const tables=db=>db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(r=>r.name);
 const cols=(db,t)=>db.prepare(`PRAGMA table_info(${t})`).all().map(c=>[c.name,c.type.toUpperCase(),c.notnull,c.pk].join(':')).sort();
+function applyRuntimeColumns(db){
+ for(const [table,column,definition] of RUNTIME_COLUMNS){
+  if(!db.prepare(`PRAGMA table_info(${table})`).all().some(c=>c.name===column))
+   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+ }
+}
 function qa(){
  const full=new DatabaseSync(':memory:');
  createDisposableErpSchema(full,extractPinnedErpBaseDdl(readFileSync(new URL('../server.js',import.meta.url),'utf8')));
+ applyRuntimeColumns(full);
  const db=new DatabaseSync(':memory:');
  for(const t of tables(full).filter(t=>!NEW.includes(t))){db.exec(full.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(t).sql)}
  return {full,db};
@@ -27,7 +45,6 @@ test('applies idempotently, matches ERP columns, preserves data, isolates compan
  assert.equal(tables(db).length,tb+NEW.length);
  for(const t of NEW){
   const exp=new Set(cols(full,t)),act=new Set(cols(db,t));
-  // ERP sale_items gets company_id via ensureColumn too; compare by superset of ERP runtime columns
   const missing=[...exp].filter(c=>!act.has(c));
   assert.deepEqual(missing,[],t);
  }
