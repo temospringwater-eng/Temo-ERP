@@ -1,0 +1,40 @@
+name: TEMO ERP 114-Table Native Wrangler D1 LOCAL Gate
+on:
+  pull_request:
+    paths:
+      - 'server.js'
+      - 'services/d1-erp-full-schema-preflight.mjs'
+      - 'scripts/erp-114-wrangler-native-local.mjs'
+      - 'tests/d1-erp-wrangler-local.test.mjs'
+      - 'tests/d1-erp-full-schema-preflight.test.mjs'
+      - '.github/workflows/erp-full-native-d1-local-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server.js'
+      - 'services/d1-erp-full-schema-preflight.mjs'
+      - 'scripts/erp-114-wrangler-native-local.mjs'
+      - 'tests/d1-erp-wrangler-local.test.mjs'
+      - 'tests/d1-erp-full-schema-preflight.test.mjs'
+      - '.github/workflows/erp-full-native-d1-local-qa.yml'
+permissions:
+  contents: read
+jobs:
+  native-wrangler-local-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: TDD unit and disposable SQLite integration, no customer data
+        run: |
+          node --check scripts/erp-114-wrangler-native-local.mjs
+          node --experimental-sqlite --test tests/d1-erp-full-schema-preflight.test.mjs tests/d1-erp-wrangler-local.test.mjs
+      - name: Install Wrangler for LOCAL D1 only, without Cloudflare credentials
+        run: |
+          npm install --prefix "$RUNNER_TEMP/temo-d1-local-gate" --no-save --no-audit --no-fund wrangler@4
+          echo "TEMO_WRANGLER_BINARY=$RUNNER_TEMP/temo-d1-local-gate/node_modules/.bin/wrangler" >> "$GITHUB_ENV"
+      - name: Execute full pinned ERP 114-table schema against disposable native Wrangler D1 LOCAL
+        run: node scripts/erp-114-wrangler-native-local.mjs
