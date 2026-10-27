@@ -1,5 +1,7 @@
 # Phase 1 — Isolated ERP QA SQLite snapshot and restoration
 
+> **Architecture superseded (27 October 2026):** The approved hosted ERP target is **Cloudflare Workers + D1**, not a persistent Node/SQLite QA server. This file documents **legacy local/disposable SQLite backup testing only**. It does not back up D1. Follow [Cloudflare D1 architecture](CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md) for D1 Time Travel/export, isolated bindings and controlled migrations.
+
 **Status:** Local/disposable QA snapshot automation. Hosting is **not provisioned** and no live D1/ERP finance sync is active.
 
 ## Purpose

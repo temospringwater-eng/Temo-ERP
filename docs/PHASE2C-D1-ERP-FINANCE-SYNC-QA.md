@@ -1,6 +1,8 @@
 # Phase 2C — Private D1 → Central ERP Finance Sync (QA)
 Status: **server transport built and tested with disposable SQLite**. NOT live ERP financial sync.
 
+> **Transition-only QA adapter (27 October 2026):** The target is **Cloudflare Workers + one canonical ERP D1 per environment**, not an independently hosted Node ERP service. This HTTP-to-local-SQLite finance bridge is retained as tested QA migration/reconciliation code only while separate databases may exist. Never claim its successful SQLite tests mean live D1 finance synchronization. See [Cloudflare D1 architecture](CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md).
+
 ## Contract
 D1 source builds `{event,signature}` directly from company/driver-owned completed delivery, evidence, successful offline sync and payment records. Source HMAC key is *separate* from service-to-service transport HMAC key.
 

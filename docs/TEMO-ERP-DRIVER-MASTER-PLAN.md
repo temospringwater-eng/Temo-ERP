@@ -2,6 +2,8 @@
 
 **Baseline:** 27 October 2026. **Owner:** TEMO Spring Water. **Primary repository:** `temospringwater-eng/Temo-ERP`. **Driver repository:** `babar200/TEMO-Driver-Android-QA`.
 
+**Target platform: Cloudflare Workers + D1 for ERP, Driver API and future Customer API.** No external Node-server hosting. D1 is the database and Workers run the APIs; `server.js` (Express / `sqlite3`) still needs migration and cannot be deployed unchanged. See [Cloudflare architecture decision](CLOUDFLARE-WORKERS-D1-ARCHITECTURE.md).
+
 **One source of truth for the remaining roadmap.** This document merges the original 8-stage ERP concept, subsequent commercial SaaS scope, Tarsil-inspired native Driver App requirements, and Cloudflare D1 ↔ central ERP financial integration. Keep current core functionality; no rewrite or premature production posting.
 
 ## A. What is already built versus what is proven
@@ -37,29 +39,29 @@
 - Establish traceable issue/PR/checklist for every open blocker, and backup the known-good source.
 **Done only when:** mandatory ERP and Driver unit + integration and Android QA checks green on current baseline, no unexplained 404 or undisclosed merge blocker; report actual active deployment.
 
-### Phase 1 — Isolated central ERP QA hosting + disaster recovery
-**Priority: P0; status: active — secure localhost QA bootstrap merged; private HTTPS host and durable QA disk provisioning pending. Depends on Phase 0.**
-- Provision private HTTPS **QA** ERP host and isolated SQLite database with durable disk, login/secret management, restricted service endpoint and no public access to finance bridge.
-- Run ERP schema check, test data seed, backup, restore and rollback drills; document environment, SSL and health evidence.
-- Create separate production backup/restore plan; do not migrate normal `hayrila.db` or post real finance in this phase.
-**Done only when:** authenticated staging ERP reachable, persistent QA DB proven across restart, backups restored successfully, secrets not in repo/logs.
+### Phase 1 — Cloudflare Workers + D1 isolated QA foundation
+**Priority: P0; status: active — existing Driver QA D1/Worker available; central ERP Workers/D1 not migrated. Depends on Phase 0.**
+- Cloudflare Workers is the API hosting target and **D1** the persistence layer; Cloudflare Pages/static assets may host ERP web UI.
+- Verify actual existing Driver QA Worker bindings and D1 identifiers read-only; provision/reuse a distinctly isolated **QA D1**, separate from production. No inferred database IDs or automatic live Worker deployment.
+- Audit `server.js` direct `sqlite3`, `DB_PATH`, `app.listen()` and Express routes. Define Workers-compatible route/query adapters using `env.DB`; do not pretend existing Node ERP can run unmodified on Cloudflare.
+- Verify D1 Time Travel eligibility, export/import, schema-only migration, quota and recovery on disposable QA. Local SQLite backup/HTTPS test work stays as **legacy compatibility tests**, not target hosting.
+**Done only when:** Worker QA routes, authoritative QA D1 binding, read-only schema inventory, CI + isolated migration rollback and safe D1 recovery demonstrated with no customer writes.
 
-### Phase 2 — Schema agreement, tenant mapping, invoice and stock policy
+### Phase 2 — Central ERP D1 schema migration and tenant/financial mapping
 **Priority: P0. Depends on Phase 1.**
-- Back up D1; review and safely apply **QA-only** additive migrations for proof evidence and `driver_finance_outbox`.
-- Map each D1 company/driver/customer/order/delivery/product/bottle/warehouse ID to authoritative ERP IDs, independently and explicitly; never assume integer IDs correspond.
-- Decide warehouse-vs-van stock movement semantics, current/previous invoice status, credit/partial recovery, bottle deposits and bottle return accounting; default deny unapproved mapping.
-- Check no already-posted ERP payment, credit or stock entry can be charged again.
-**Done only when:** signed-off, tenant-scoped mapping and policy matrix for synthetic QA data, migration + rollback proof and source/target reconciliation baseline.
+- Migrate existing ERP Node/Express/`sqlite3` business services incrementally to Workers-compatible, async D1 logic; keep original interface, security and company isolation.
+- Review and apply versioned, reversible **QA-only** D1 SQL migrations; compare ERP SQLite schema, Driver D1 schema, foreign keys, indices and QA migration history. Never upload a raw SQLite .db as the D1 target.
+- Map every D1 company/driver/user/customer/order/delivery/product/bottle/warehouse ID explicitly; preserve existing accounting identity.
+- Determine invoice/stock deduction timing, van/warehouse, full/partial/credit recovery, deposits and bottle return rules; refuse duplicate finance or negative stock.
+**Done only when:** protected Workers ERP QA API operates on mapped QA D1 with compatible SQL, role/tenant tests, migration/export rollback and synthetic ledger reconciliation.
 
-### Phase 3 — Secure D1 → ERP finance transport
+### Phase 3 — Single canonical ERP D1 and driver finance sync
 **Priority: P0. Depends on Phase 2.**
-- Mount the existing **QA-only** signed ERP adapter on the isolated QA service, not production `server.js`.
-- Provision two distinct 32+ byte private keys: proof receipt HMAC and transport/ACK HMAC; secure rotation and access controls.
-- Use validated D1 source receipt built from authoritative completed delivery, proof assets and payment; HTTPS allowlist + service auth.
-- Activate bounded D1 outbox replay **only for designated synthetic QA deliveries**. ACK only after independently verified ERP signed response; block unsigned, stale, wrong-company and changed receipts.
-- Reconcile payment, invoice debit/credit, products, van/warehouse stock, bottles and source/ERP proof GPS in a **single atomic ERP transaction**.
-**Done only when:** D1 → private ERP QA → signed ERP ACK → durable D1 acknowledgment works E2E, plus replay/lost-ACK/conflict tests show one posting, not two.
+- **Prefer one canonical ERP D1 per environment** shared by authorized ERP and Driver Workers to remove dual independent customer financial ledgers. Verify existing Driver QA D1 separately before changing bindings.
+- In transition with two isolated QA D1 databases, use the existing signed-receipt, HMAC transport, idempotent outbox and acknowledgment as a temporary bridge; **no distributed transaction across distinct D1**.
+- Within the canonical ERP D1, make delivery payment, invoice/credit, bottle and stock mutations atomic using Worker D1 prepared statements and suitable `env.DB.batch()` patterns; required proof signature/photo/GPS remains mandatory.
+- Run lost-ACK, retry, tenant isolation, conflict, stock and cash-closing tests, with read-after-write and administrative reconciliation.
+**Done only when:** synthetic D1 delivery→ERP ledgers→driver read-back is complete, uniquely idempotent, fully reconciled, and proven through real QA Worker bindings.
 
 ### Phase 4 — Active Cloudflare QA API + native Driver App
 **Priority: P0. Depends on Phases 2–3 for financial completion.**
@@ -79,13 +81,12 @@
 - Product-owner UAT for office admin, driver and customer views; record pass/fail evidence for each feature.
 **Done only when:** no unexplained reconciliation differences, zero duplicate financial postings, full required UAT signed off and backups/restore proved.
 
-### Phase 6 — Controlled production release (original go-live step)
+### Phase 6 — Cloudflare Workers + D1 controlled production release
 **Priority: P0. Depends on Phase 5; explicit approval required.**
-- Choose hosting plan, production domain/HTTPS, encrypted secrets, durable database, monitoring, backups, operator ownership and documented rollback.
-- Stage production migration with verified backup and maintenance process. Release ERP + Android + Worker in a controlled order; smoke real endpoints with a strictly authorized limited pilot.
-- Switch live finance posting **only after** written evidence and explicit owner authorization. Do not use broad customer writes as initial testing.
-- Verify first pilot ledger, cash, invoice, stock, bottle and offline retries; restore/rollback if mismatch.
-**Done only when:** pilot successful, production incident/recovery procedure available and both ERP/Driver user journeys accepted.
+- Secure QA-to-production promotion of vetted Cloudflare Workers APIs and separately approved production D1 migrations. No third-party Node hosting or automatic billing changes.
+- Confirm production D1 Time Travel bookmark/export, cross-environment restore evidence, exact Worker version, access control, least-privilege D1 bindings, analytics and rollback.
+- Pilot ERP + native Driver App + customer view in order: customer/order → driver proof → atomic invoice/cash/credit/stock/bottle D1 ledger → read-back. No real customer finance writes until explicit authorization.
+**Done only when:** independent production D1/Worker resources are identified, recovery verified, pilot ledgers reconcile, and release approval recorded.
 
 ### Phase 7 — Commercial SaaS completion and Phase 2 product roadmap
 **Priority: P1; after stable go-live.**
@@ -97,12 +98,12 @@
 
 ## D. Delivery system rules (must not regress)
 
-- ERP is the financial source of truth. D1 is driver operational/offline storage and **never a second independent customer ledger authority**.
+- **Canonical ERP D1 is the financial source of truth**. Existing Driver D1 is an isolated operational QA store until safe unification; never keep two independently mutable customer finance ledgers.
 - No legacy delivery OTP fallback. Signature + photo + GPS required for normal delivery; separate login recovery OTP need not be removed.
 - Every development change uses **TDD → unit tests → integration tests → code review → CI → isolated QA → verified read-back**. For Android or Worker changes also test relevant device/Cloudflare environment.
 - Driver accesses only their tenant/assigned records; Admin-only permissions enforced in API as well as UI; all overrides audited.
 - Offline queue and idempotency must tolerate retry/restart without double-charging, double stock deduction or lost payments; fail closed when mappings, proof or balance are uncertain.
-- No production deploy, ledger migration, bulk import, destructive change or billable hosting purchase without explicit user approval and backup evidence.
+- No production Worker deploy, D1 migration/binding change, bulk import, destructive change or billable Cloudflare upgrade without explicit user approval and backup evidence.
 - Preserve existing features and data. Do not silently mark completed if only source code or a preview version exists.
 
 ## E. Single status update format
@@ -120,5 +121,6 @@ For each phase report: `Phase | Done/Active/Blocked | exact PR/CI evidence | roo
 - Hosted QA SQLite restart, strong credentials and non-duplicate privileged account integration tests **passed** and were merged in ERP PR #33; merged-main full regression passed: https://github.com/temospringwater-eng/Temo-ERP/actions/runs/40455314624 . Actual persistent cloud QA host is still unprovisioned.
 - Phase 1 private WAL-safe SQLite QA backup + restore automation **merged** in ERP PR #36; main CI: https://github.com/temospringwater-eng/Temo-ERP/actions/runs/40456366640. This is operator-local, private and **does not perform cloud backups**.
 - Phase 1 localhost HTTPS staging with trusted synthetic TLS cert, strong admin login and protected API **merged** in ERP PR #37; PR CI: https://github.com/temospringwater-eng/Temo-ERP/actions/runs/40456614420. The test's TLS endpoint is ephemeral and **not a persistent or publicly reachable hosted QA deployment**.
-- Next safe task: procure/attach **isolated private QA host** with persistent disk, HTTPS tunnel/access control, secret manager and verified host-level backup/restore. Do not run existing `hayrila.db` on QA or activate live D1 finance sync.
-- `Step 8: Production Go-Live` remains pending; **zero live customer financial receipts synchronized**.
+- **Architecture decision updated:** Cloudflare Workers + D1 is the hosting/data platform. No external Node server. The earlier private disk/localhost TLS tests remain local QA verification only.
+- **Next safe task:** read-only current Cloudflare Driver D1 binding/schema inventory, Workers-compatible ERP API design, isolated QA D1 migration rehearsal and D1 Time Travel/export backup verification. Do not directly mount legacy `hayrila.db` into Workers.
+- `Step 8: Production Go-Live` remains pending; **zero live customer financial receipts synchronized**. Central ERP Worker/D1 migration is NOT completed yet.
