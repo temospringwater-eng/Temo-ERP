@@ -346,3 +346,39 @@ test('TDD integration: posted signed delivery is independently reconciled across
  await assert.rejects(f.service.post({event:signedEvent,signature:signed}),
   /reconciliation|required|differs/i,'replay must never ACK altered bottle ledger');
 });
+
+test('TDD initial ERP ACK must fail if an AFTER INSERT trigger silently corrupts stock movement quantity',async t=>{
+ const f=fixture();t.after(f.close);
+ // Simulate a broken inventory hook: valid SQL insert succeeds but silently changes quantity.
+ f.db.exec("CREATE TRIGGER corrupt_qa_stock AFTER INSERT ON stock_movements BEGIN "+
+  "UPDATE stock_movements SET quantity=quantity+1 WHERE rowid=NEW.rowid; END");
+ const e=event(),signature=signBridgeEvent(secret,e);
+ await assert.rejects(f.service.post({event:e,signature}),/reconcil|differ|ledger|integrity/i);
+ assert.equal(f.count('payments'),0,'no cash collection commits before ledger verification');
+ assert.equal(f.count('credit_ledger'),0);
+ assert.equal(f.count('stock_movements'),0);
+ assert.equal(f.count('bottle_movements'),0);
+ assert.equal(f.count('driver_finance_bridge_receipts'),0,'no signed success ACK persists');
+ assert.equal(f.db.prepare('SELECT stock FROM products WHERE id=51').get().stock,20);
+ assert.equal(f.db.prepare('SELECT status FROM deliveries WHERE id=801').get().status,'out_for_delivery');
+ f.db.exec('DROP TRIGGER corrupt_qa_stock');
+ const accepted=await f.service.post({event:e,signature});
+ assert.equal(accepted.status,'applied');
+ assert.equal(f.count('payments'),1);
+});
+test('TDD initial ERP ACK must fail and roll back if a trigger silently corrupts customer invoice debit',async t=>{
+ const f=fixture();t.after(f.close);
+ f.db.exec("CREATE TRIGGER corrupt_qa_debit AFTER INSERT ON credit_ledger "+
+  "WHEN NEW.entry_type='debit' BEGIN UPDATE credit_ledger SET amount=amount+1 WHERE rowid=NEW.rowid; END");
+ const e=event(),signature=signBridgeEvent(secret,e);
+ await assert.rejects(f.service.post({event:e,signature}),/reconcil|differ|ledger|integrity/i);
+ assert.equal(f.count('payments'),0);
+ assert.equal(f.count('credit_ledger'),0);
+ assert.equal(f.count('stock_movements'),0);
+ assert.equal(f.count('driver_finance_bridge_receipts'),0);
+ assert.equal(f.db.prepare('SELECT status FROM deliveries WHERE id=801').get().status,'out_for_delivery');
+ f.db.exec('DROP TRIGGER corrupt_qa_debit');
+ const accepted=await f.service.post({event:e,signature});
+ assert.equal(accepted.status,'applied');
+ assert.equal(f.count('payments'),1);
+});
