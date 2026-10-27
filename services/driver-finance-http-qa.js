@@ -47,8 +47,12 @@ function createDriverFinanceHttpQa({app,qaEnabled=false,nodeEnv=process.env.NODE
   try{
    const receipt=await service.post(payload); // Dedicated atomic and idempotent DB posting
    if(receipt?.status!=='applied'||!Number.isSafeInteger(receipt.erpDeliveryId)||
-      !Number.isSafeInteger(receipt.d1DeliveryId))
-    throw Error('ERP posted result invalid');
+      receipt.erpDeliveryId<1||!Number.isSafeInteger(receipt.d1DeliveryId)||
+      receipt.d1DeliveryId<1||!Number.isSafeInteger(receipt.companyId)||
+      receipt.companyId<1||!Number.isSafeInteger(receipt.d1CompanyId)||
+      receipt.d1CompanyId<1||receipt.d1CompanyId!==payload.event?.source?.companyId||
+      receipt.d1DeliveryId!==payload.event?.source?.deliveryId)
+    throw Error('ERP posted result invalid or signed source mapping mismatch');
    const raw=JSON.stringify({ok:true,receipt});
    res.setHeader('Content-Type','application/json');
    res.setHeader('x-temo-qa-ack-time',stamp);

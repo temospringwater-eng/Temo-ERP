@@ -72,6 +72,8 @@ test('TDD integration: verified D1 receipt posts payment, invoice/customer credi
  const first=await f.service.post({event:e,signature});
  assert.equal(first.status,'applied');
  assert.equal(first.erpDeliveryId,801);
+ assert.equal(first.companyId,40,'ERP tenant ID must remain mapped tenant 40');
+ assert.equal(first.d1CompanyId,1,'Source D1 tenant ID must also be signed, not silently inferred');
  assert.equal(f.db.prepare('SELECT status,collected_amount FROM deliveries WHERE id=801').get().status,'delivered');
  assert.equal(f.db.prepare('SELECT collected_amount FROM deliveries WHERE id=801').get().collected_amount,100);
  assert.equal(f.db.prepare('SELECT status FROM orders WHERE id=701').get().status,'delivered');
@@ -84,6 +86,7 @@ test('TDD integration: verified D1 receipt posts payment, invoice/customer credi
  assert.equal(f.count('delivery_bottle_counts'),1);assert.equal(f.count('delivery_proofs'),1);
  assert.equal(f.count('driver_finance_bridge_proof_gps'),1);assert.equal(f.count('driver_finance_bridge_receipts'),1);
  assert.deepEqual(await f.service.post({event:e,signature}),first);
+ assert.equal(JSON.parse(f.db.prepare('SELECT result_json FROM driver_finance_bridge_receipts').get().result_json).d1CompanyId,1);
  assert.equal(f.count('payments'),1);assert.equal(f.count('stock_movements'),2);
  const changed={...e,payment:{amount:90,method:'cash'}};
  await assert.rejects(f.service.post({event:changed,signature:signBridgeEvent(secret,changed)}),/conflict/i);
