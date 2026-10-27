@@ -6,10 +6,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const port = 34000 + (process.pid % 500);
+let port = 0; // Assigned by the OS and read from the child's actual listen log.
 const databasePath = path.join(os.tmpdir(), `temo-smoke-${process.pid}.db`);
 let serverProcess;
 let startupErrors = '';
+let startupOutput = '';
 function request(path) {
   return new Promise((resolve, reject) => {
     const req = http.get(`http://127.0.0.1:${port}${path}`, (res) => {
@@ -23,13 +24,21 @@ function request(path) {
 }
 async function waitForServer() {
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    try { return await request('/health'); } catch (_) { await new Promise((resolve) => setTimeout(resolve, 100)); }
+    if (port > 0) {
+      try { return await request('/health'); } catch (_) { /* not listening yet */ }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Server did not start: ${startupErrors.slice(0, 1200)}`);
 }
 
 test.before(async () => {
-  serverProcess = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), DB_PATH: databasePath }, stdio: ['ignore', 'ignore', 'pipe'] });
+  serverProcess = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: '0', DB_PATH: databasePath }, stdio: ['ignore', 'pipe', 'pipe'] });
+  serverProcess.stdout.on('data', (chunk) => {
+    startupOutput += chunk.toString();
+    const match = startupOutput.match(/Hayrila starter running at http:\/\/localhost:(\d+)/);
+    if (match) port = Number(match[1]);
+  });
   serverProcess.stderr.on('data', (chunk) => { startupErrors += chunk.toString(); });
   const health = await waitForServer();
   assert.equal(health.status, 200);

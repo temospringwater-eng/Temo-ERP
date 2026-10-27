@@ -19,7 +19,8 @@ const { getSubscriptionStatus, accessError } = require('./services/subscription-
 const { NORMAL_FEATURES, ENTERPRISE_FEATURES, createFeatureAccessService } = require('./services/feature-access-service');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const { parseServerPort, nextServerPort } = require('./services/server-port');
+const PORT = parseServerPort(process.env.PORT);
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'hayrila.db');
 const hostedQa = process.env.TEMO_ERP_HOSTED_QA === '1';
 // Hosted QA must be an isolated, loopback-only test service, never a normal ERP DB.
@@ -6635,12 +6636,19 @@ app.get('*', (req, res) => {
 
 function startServer(port) {
   const server = app.listen(port, hostedQa ? '127.0.0.1' : undefined, () => {
-    console.log(`Hayrila starter running at http://localhost:${port}`);
+    console.log(`Hayrila starter running at http://localhost:${server.address().port}`);
   });
 
   server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
-      const fallbackPort = port + 1;
+      let fallbackPort;
+      try {
+        fallbackPort = nextServerPort(port);
+      } catch (portError) {
+        console.error('Server failed to start:', portError.message);
+        process.exitCode = 1;
+        return;
+      }
       console.warn(`Port ${port} is busy, retrying on ${fallbackPort}`);
       startServer(fallbackPort);
       return;
