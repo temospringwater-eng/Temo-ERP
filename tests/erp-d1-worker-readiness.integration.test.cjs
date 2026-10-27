@@ -189,3 +189,58 @@ test('TDD malformed FK metadata cannot be interpreted as a successful canonical 
  assert.equal(response.status,503);
  assert.equal((await response.json()).error,'qa_d1_schema_unavailable');
 });
+
+test('TDD pinned 64 UNIQUE and composite PK contracts match local ERP SQLite DDL',t=>{
+ const {readFileSync}=require('node:fs'),{resolve}=require('node:path');
+ const {extractPinnedErpBaseDdl,createDisposableErpSchema}=require('../services/d1-erp-full-schema-preflight.mjs');
+ const {ERP_D1_BASE_UNIQUE_KEYS}=require('../services/d1-erp-base-unique-manifest-qa.mjs');
+ const sqlite=new DatabaseSync(':memory:');t.after(()=>sqlite.close());
+ createDisposableErpSchema(sqlite,extractPinnedErpBaseDdl(readFileSync(resolve(__dirname,'../server.js'),'utf8')));
+ let count=0;
+ for(const [name,expected] of Object.entries(ERP_D1_BASE_UNIQUE_KEYS)){
+  const indexes=sqlite.prepare("PRAGMA index_list('"+name+"')").all()
+   .filter(r=>r.unique===1&&['u','pk'].includes(r.origin))
+   .map(r=>({origin:r.origin,columns:sqlite.prepare("PRAGMA index_info('"+r.name+"')").all().map(c=>c.name)}))
+   .sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  assert.deepEqual(indexes,expected,name);
+  count+=indexes.length;
+ }
+ assert.equal(count,64);
+});
+test('TDD a 114-table QA replica missing users.username UNIQUE cannot assert complete ERP D1 schema',async t=>{
+ const {readFileSync}=require('node:fs'),{resolve}=require('node:path');
+ const {extractPinnedErpBaseDdl,createDisposableErpSchema}=require('../services/d1-erp-full-schema-preflight.mjs');
+ const sqlite=new DatabaseSync(':memory:');t.after(()=>sqlite.close());
+ createDisposableErpSchema(sqlite,extractPinnedErpBaseDdl(readFileSync(resolve(__dirname,'../server.js'),'utf8')));
+ sqlite.exec('PRAGMA foreign_keys=OFF;BEGIN IMMEDIATE;');
+ try{
+  // CTAS retains column names/types but removes UNIQUE, FK and source PKs:
+  // readiness must fail on loss of constraints rather than mistake names for parity.
+  sqlite.exec('CREATE TABLE users_unique_clone AS SELECT * FROM users WHERE 0');
+  sqlite.exec('DROP TABLE users');
+  sqlite.exec('ALTER TABLE users_unique_clone RENAME TO users');
+  sqlite.exec('COMMIT');
+ }catch(e){sqlite.exec('ROLLBACK');throw e}
+ const observed=[];
+ const env={TEMO_ERP_D1_QA_MODE:'1',TEMO_ERP_QA_DIAGNOSTIC_SECRET:secret,
+  DB:{prepare(sql){observed.push(sql);return{all:async()=>({results:sqlite.prepare(sql).all()})}}}};
+ const response=await createErpD1QaReadinessHandler()(req(),env),body=await response.json();
+ assert.equal(response.status,200);
+ assert.equal(body.canonicalSchemaReady,false);
+ assert.ok(body.baseUniqueGaps.some(x=>x.table==='users'&&
+  x.missing.some(u=>u.origin==='u'&&u.columns.includes('username'))));
+ assert.equal(body.financeCutoverAllowed,false);
+ assert.ok(observed.some(sql=>sql==="PRAGMA index_list('users')"));
+});
+test('TDD rejecting unsafe PRAGMA index metadata must fail closed without SQL/customer values',async t=>{
+ const f=fixture();t.after(f.close);f.sqlite.exec('CREATE TABLE companies(id INTEGER PRIMARY KEY)');
+ const db={prepare(sql){
+  if(sql.startsWith("SELECT "))return{all:async()=>({results:[{name:'companies'}]})};
+  if(sql.startsWith("PRAGMA table_info"))return{all:async()=>({results:[{name:'id',type:'INTEGER'}]})};
+  if(sql.startsWith("PRAGMA foreign_key_list"))return{all:async()=>({results:[]})};
+  return{all:async()=>({results:[{name:'users;DROP TABLE users',origin:'u',unique:1}]})};
+ }};
+ const response=await createErpD1QaReadinessHandler()(req(),{...f.env,DB:db});
+ assert.equal(response.status,503);
+ assert.doesNotMatch(await response.text(),/DROP|users|PRAGMA/);
+});
