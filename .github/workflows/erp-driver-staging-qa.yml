@@ -4,6 +4,7 @@ on:
     paths:
       - "server.js"
       - "services/**"
+      - "worker/**"
       - "public/**"
       - "tests/**"
       - "migrations/**"
@@ -18,6 +19,7 @@ on:
     paths:
       - "server.js"
       - "services/**"
+      - "worker/**"
       - "public/**"
       - "tests/**"
       - "migrations/**"
@@ -54,6 +56,8 @@ jobs:
         run: node --test tests/ci-pipeline-guard.test.cjs tests/source-integrity.test.cjs
       - name: Production bootstrap fail-closed security regression
         run: timeout -k 5s 100s node --test --test-force-exit tests/bootstrap-security.test.js
+      - name: Workers D1 company-scoped ERP read-only unit/integration QA
+        run: node --experimental-sqlite --test tests/erp-d1-admin-summary.integration.test.cjs
       - name: Cloudflare Workers D1 migration architecture contract and portability inventory
         run: node --test tests/cloudflare-d1-architecture.test.cjs
       - name: Private local HTTPS staging TLS, login and ERP role-isolation smoke
