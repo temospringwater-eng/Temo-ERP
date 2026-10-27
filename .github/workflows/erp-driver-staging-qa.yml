@@ -9,6 +9,16 @@ on:
       - "migrations/**"
       - "package*.json"
       - ".github/workflows/erp-driver-staging-qa.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server.js"
+      - "services/**"
+      - "public/**"
+      - "tests/**"
+      - "migrations/**"
+      - "package*.json"
+      - ".github/workflows/erp-driver-staging-qa.yml"
   workflow_dispatch:
 permissions:
   contents: read
