@@ -7,6 +7,8 @@ on:
       - 'scripts/erp-114-wrangler-native-local.mjs'
       - 'tests/d1-erp-wrangler-local.test.mjs'
       - 'tests/d1-erp-full-schema-preflight.test.mjs'
+      - 'services/d1-erp-107-table-local-rehearsal.mjs'
+      - 'tests/d1-erp-107-table-local-rehearsal.test.mjs'
       - '.github/workflows/erp-full-native-d1-local-qa.yml'
   push:
     branches: [main]
@@ -31,7 +33,7 @@ jobs:
       - name: TDD unit and disposable SQLite integration, no customer data
         run: |
           node --check scripts/erp-114-wrangler-native-local.mjs
-          node --experimental-sqlite --test tests/d1-erp-full-schema-preflight.test.mjs tests/d1-erp-wrangler-local.test.mjs
+          node --experimental-sqlite --test tests/d1-erp-full-schema-preflight.test.mjs tests/d1-erp-wrangler-local.test.mjs tests/d1-erp-107-table-local-rehearsal.test.mjs
       - name: Install Wrangler for LOCAL D1 only, without Cloudflare credentials
         run: |
           npm install --prefix "$RUNNER_TEMP/temo-d1-local-gate" --no-save --no-audit --no-fund wrangler@4
