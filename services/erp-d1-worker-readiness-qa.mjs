@@ -4,6 +4,7 @@
 import {ERP_D1_BASE_TABLES} from './d1-erp-base-table-manifest-qa.mjs';
 import {ERP_D1_BASE_COLUMNS} from './d1-erp-base-column-manifest-qa.mjs';
 import {ERP_D1_BASE_FOREIGN_KEYS} from './d1-erp-base-fk-manifest-qa.mjs';
+import {ERP_D1_BASE_UNIQUE_KEYS} from './d1-erp-base-unique-manifest-qa.mjs';
 export const ERP_D1_CORE_TABLES=Object.freeze([
  'companies','users','customers','products','orders','deliveries','payments',
  'credit_ledger','stock_movements','bottle_movements','driver_finance_outbox'
@@ -65,6 +66,27 @@ async function readTableFkList(db,table){
   throw Error('duplicate FK metadata');
  return keys;
 }
+async function readTableUniqueKeys(db,table){
+ if(!SAFE_NAME.test(table)||!Object.hasOwn(ERP_D1_BASE_UNIQUE_KEYS,table))
+  throw Error('unreviewed UNIQUE table name');
+ const r=await db.prepare("PRAGMA index_list('"+table+"')").all();
+ if(!Array.isArray(r?.results)||r.success===false)throw Error('unverified D1 index metadata');
+ const constraints=[];
+ for(const index of r.results){
+  if(!index||!SAFE_NAME.test(index.name)||!['u','pk','c'].includes(index.origin)||
+      ![0,1].includes(index.unique))throw Error('untrusted D1 index metadata');
+  if(index.unique!==1)continue;
+  const columns=await db.prepare("PRAGMA index_info('"+index.name+"')").all();
+  if(!Array.isArray(columns?.results)||columns.success===false||
+     !columns.results.length||columns.results.some((r,i)=>
+       !r||!SAFE_NAME.test(r.name)||r.seqno!==i))
+   throw Error('unsupported or malformed unique constraint');
+  constraints.push({origin:index.origin,columns:columns.results.map(c=>c.name)});
+ }
+ if(new Set(constraints.map(x=>JSON.stringify(x))).size!==constraints.length)
+  throw Error('duplicate unique constraint metadata');
+ return constraints;
+}
 export function createErpD1QaReadinessHandler(){
  return async function handle(request,env){
   if(!request||!env||env.TEMO_ERP_D1_QA_MODE!=='1'||
@@ -93,7 +115,7 @@ export function createErpD1QaReadinessHandler(){
    const names=new Set(list);
    const missingCore=ERP_D1_CORE_TABLES.filter(name=>!names.has(name));
    const missing=ERP_D1_BASE_TABLES.filter(name=>!names.has(name));
-   const baseColumnGaps=[],criticalColumnGaps=[],baseFkGaps=[];
+   const baseColumnGaps=[],criticalColumnGaps=[],baseFkGaps=[],baseUniqueGaps=[];
    const inspected=new Map();
    for(const table of ERP_D1_BASE_TABLES){
     if(!names.has(table))continue;
@@ -117,6 +139,15 @@ export function createErpD1QaReadinessHandler(){
     const unexpectedFks=actualFk.filter(fk=>!expectedSet.has(JSON.stringify(fk)));
     if(missingFks.length||unexpectedFks.length)
      baseFkGaps.push({table,missing:missingFks,unexpected:unexpectedFks});
+    const expectedUnique=ERP_D1_BASE_UNIQUE_KEYS[table];
+    if(!Array.isArray(expectedUnique))throw Error('missing pinned unique contract');
+    const actualUnique=await readTableUniqueKeys(env.DB,table);
+    const expectedUniqueSet=new Set(expectedUnique.map(JSON.stringify));
+    const actualUniqueSet=new Set(actualUnique.map(JSON.stringify));
+    const missingUnique=expectedUnique.filter(u=>!actualUniqueSet.has(JSON.stringify(u)));
+    const unexpectedUnique=actualUnique.filter(u=>!expectedUniqueSet.has(JSON.stringify(u)));
+    if(missingUnique.length||unexpectedUnique.length)
+     baseUniqueGaps.push({table,missing:missingUnique,unexpected:unexpectedUnique});
    }
    for(const [table,fields] of Object.entries(CORE_COLUMNS)){
     if(!names.has(table))continue;
@@ -126,15 +157,16 @@ export function createErpD1QaReadinessHandler(){
    }
    const baseSchemaNameAndColumnReady=missing.length===0&&baseColumnGaps.length===0;
    const baseFkReady=baseFkGaps.length===0;
+   const baseUniqueReady=baseUniqueGaps.length===0;
    const coreSchemaReady=missingCore.length===0;
    // Additional runtime ALTERs, FKs, indexes, tenant mappings and actual
    // Worker deployment still have separate release gates. This never flips posting.
-   const canonicalSchemaReady=baseSchemaNameAndColumnReady&&baseFkReady&&coreSchemaReady&&
+   const canonicalSchemaReady=baseSchemaNameAndColumnReady&&baseFkReady&&baseUniqueReady&&coreSchemaReady&&
       criticalColumnGaps.length===0;
    return json({qaOnly:true,coreSchemaReady,baseSchemaNameAndColumnReady,
     canonicalSchemaReady,tableCount:names.size,expectedErpBaseTables:114,
     missingTables:missing,missingCoreTables:missingCore,
-    baseColumnGaps,baseFkReady,baseFkGaps,criticalColumnGaps,
+    baseColumnGaps,baseFkReady,baseFkGaps,baseUniqueReady,baseUniqueGaps,criticalColumnGaps,
     financeCutoverAllowed:false,productionReady:false},200);
   }catch{
    return json({error:'qa_d1_schema_unavailable'},503);
