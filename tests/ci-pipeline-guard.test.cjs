@@ -32,3 +32,17 @@ test('TDD: full ERP regression MUST run after merge onto main, not PR only',()=>
  assert.match(yaml,/"services\/\*\*"/,'Production services must stay in CI path gate');
  assert.match(yaml,/"tests\/\*\*"/,'Unit and integration tests must stay in CI path gate');
 });
+
+test('TDD: native D1 readiness gate runs when its schema manifests or worker contract change',()=>{
+ const nativeD1=fs.readFileSync('.github/workflows/erp-full-native-d1-local-qa.yml','utf8');
+ for(const path of [
+ "'services/erp-d1-worker-readiness-qa.mjs'",
+ "'services/d1-erp-base-*-manifest-qa.mjs'",
+ "'tests/erp-d1-worker-readiness.integration.test.cjs'"
+ ]){
+ assert.ok(nativeD1.split(path).length-1>=2,
+  `Native D1 QA must watch ${path} on pull requests and main pushes`);
+ }
+ assert.match(nativeD1,/node --experimental-sqlite --test [^\n]*tests\/erp-d1-worker-readiness\.integration\.test\.cjs/,
+ 'Native D1 QA must execute the pinned schema, FK, and unique parity integration tests');
+});
