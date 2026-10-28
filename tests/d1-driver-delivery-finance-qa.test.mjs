@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {validateDeliveryFinanceInput,postDeliveryFinanceQa} from '../services/d1-driver-delivery-finance-qa.mjs';
+import {validateDeliveryFinanceInput,postDeliveryFinanceQa,assertCanonicalFinanceSchema} from '../services/d1-driver-delivery-finance-qa.mjs';
 const p={companyId:1,driverId:2,deliveryId:3,productId:4,quantity:5,
  cashCents:1000,creditCents:500,bottlesReturned:2,idempotencyKey:'delivery-3',
  signatureRef:'signature-1',photoRef:'photo-123',latitude:24.47,longitude:39.61};
@@ -92,7 +92,7 @@ test('committed batch with invalid change metadata must not be reported as repla
 test('canonical finance schema must be present before any delivery batch',async()=>{
  const f=fixture();
  const before=f.van();
- await assert.rejects(postDeliveryFinanceQa(f.adapter,p),/canonical D1 financial schema unavailable/);
+ await assert.rejects(assertCanonicalFinanceSchema(f.adapter),/canonical D1 financial schema unavailable/);
  assert.equal(f.van(),before);
  assert.equal(f.count('driver_delivery_posting_receipts'),0);
 });
