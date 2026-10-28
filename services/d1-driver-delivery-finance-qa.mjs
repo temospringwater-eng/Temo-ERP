@@ -52,11 +52,9 @@ export async function postDeliveryFinanceQa(db,p){
   bind("UPDATE orders SET status='delivered' WHERE company_id=? AND id=(SELECT order_id FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND status='delivered')",
    p.companyId,p.deliveryId,p.companyId,p.driverId)
  ];
+ let result;
  try{
-  const result=await db.batch(statements);
-  if(result[2]?.meta?.changes!==1||result[7]?.meta?.changes!==1||result[8]?.meta?.changes!==1)
-   throw Error('D1 posting invariant failed');
-  return {ok:true,replayed:false};
+  result=await db.batch(statements);
  }catch(error){
   const after=await lookup();
   if(after){
@@ -65,4 +63,9 @@ export async function postDeliveryFinanceQa(db,p){
   }
   throw error;
  }
+ // A committed batch is never an idempotent replay. Metadata inconsistency
+ // must surface as an error rather than being swallowed by the retry handler.
+ if(result[2]?.meta?.changes!==1||result[7]?.meta?.changes!==1||result[8]?.meta?.changes!==1)
+  throw Error('D1 posting invariant failed');
+ return {ok:true,replayed:false};
 }
