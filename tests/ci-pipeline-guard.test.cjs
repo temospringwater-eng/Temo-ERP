@@ -26,7 +26,7 @@ test('TDD: ERP CI must prove disposable SQLite backup/restore without live-data 
 });
 
 test('TDD: full ERP regression MUST run after merge onto main, not PR only',()=>{
- assert.match(yaml,/^  push:\s*\n\s+branches:\s*\[main\]/m,
+ assert.match(yaml,/^  push:\s*\n\s+branches:\s*\[main[,\]]/m,
   'Merged main must run the same full unit/integration test workflow before claiming QA green');
  assert.match(yaml,/^  pull_request:/m,'Pre-merge PR validation still required');
  assert.match(yaml,/"services\/\*\*"/,'Production services must stay in CI path gate');
