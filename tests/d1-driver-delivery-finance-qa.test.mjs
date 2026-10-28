@@ -8,6 +8,7 @@ const p={companyId:1,driverId:2,deliveryId:3,productId:4,quantity:5,
  signatureRef:'signature-1',photoRef:'photo-123',latitude:24.47,longitude:39.61};
 function fixture(){
  const db=new DatabaseSync(':memory:');
+ db.exec('CREATE TABLE users(id INTEGER PRIMARY KEY,company_id INTEGER);INSERT INTO users VALUES(2,1);');
  db.exec("CREATE TABLE products(id INTEGER PRIMARY KEY,company_id INTEGER,stock INTEGER);INSERT INTO products VALUES(4,1,50);");
  db.exec("CREATE TABLE orders(id INTEGER PRIMARY KEY,company_id INTEGER,total_amount REAL);INSERT INTO orders VALUES(9,1,15);");
  db.exec("CREATE TABLE deliveries(id INTEGER PRIMARY KEY,company_id INTEGER,driver_id INTEGER,order_id INTEGER,status TEXT);INSERT INTO deliveries VALUES(3,1,2,9,'assigned');");
