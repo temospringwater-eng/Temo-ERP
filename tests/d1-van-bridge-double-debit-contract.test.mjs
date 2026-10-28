@@ -17,3 +17,10 @@ test('van stock protection is executable code rather than commented text',()=>{
  assert.ok(guardLine,'missing guard');
  assert.match(guardLine.trim(),/^if\(/,'guard must start on its own executable line');
 });
+
+test('unmarked D1 events also fail closed before legacy warehouse debit',()=>{
+ const code=readFileSync(new URL('../services/driver-financial-bridge-posting-qa.js',import.meta.url),'utf8');
+ const block=code.slice(code.indexOf("if(await tx.get('SELECT id FROM driver_finance_bridge_receipts WHERE company_id=? AND source_key=?'"),code.indexOf("const company=await tx.get("));
+ assert.match(block,/fail\('D1 source delivery requires canonical van-stock finance integration: legacy warehouse debit prohibited'\)/);
+ assert.doesNotMatch(block,/if\s*\(\s*event\?\.source\?\.inventorySource/);
+});
