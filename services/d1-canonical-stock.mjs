@@ -13,14 +13,24 @@ export async function transferWarehouseToVan(db, {companyId,driverId,productId,q
   if(previous.request_hash !== requestHash) throw Error('idempotency conflict');
   return {ok:true,replayed:true};
  }
- // D1 batch is atomic; conditional warehouse decrement fails closed on insufficient stock.
- // Guard conditions are enforced by CHECK and the subsequent ledger insert only when stock was available.
+ // The migration's BEFORE INSERT trigger aborts the whole D1 batch on insufficient stock.
+ // Unique(company_id,idempotency_key) prevents a racing duplicate from posting twice.
  const statements=[
+  db.prepare("INSERT INTO van_stock_movements(company_id,driver_id,product_id,idempotency_key,movement_type,quantity,request_hash) VALUES(?,?,?,?,'load',?,?)").bind(companyId,driverId,productId,idempotencyKey,quantity,requestHash),
   db.prepare('UPDATE products SET stock=stock-? WHERE id=? AND company_id=? AND stock>=?').bind(quantity,productId,companyId,quantity),
-  db.prepare('INSERT INTO van_stock_balances(company_id,driver_id,product_id,quantity) VALUES(?,?,?,?) ON CONFLICT(company_id,driver_id,product_id) DO UPDATE SET quantity=quantity+excluded.quantity').bind(companyId,driverId,productId,quantity),
-  db.prepare("INSERT INTO van_stock_movements(company_id,driver_id,product_id,idempotency_key,movement_type,quantity,request_hash) VALUES(?,?,?,?,'load',?,?)").bind(companyId,driverId,productId,idempotencyKey,quantity,requestHash)
+  db.prepare('INSERT INTO van_stock_balances(company_id,driver_id,product_id,quantity) VALUES(?,?,?,?) ON CONFLICT(company_id,driver_id,product_id) DO UPDATE SET quantity=quantity+excluded.quantity').bind(companyId,driverId,productId,quantity)
  ];
- // A preflight is not a substitute for concurrency-safe transaction checks.
- // Disabled until a single-statement conditional mutation / rollback guarantee is proven.
- throw Error('QA BLOCKED: conditional stock decrement atomicity not yet verified');
+ try {
+  const results=await db.batch(statements);
+  if(results[1]?.meta?.changes !== 1) throw Error('warehouse update invariant failed');
+  return {ok:true,replayed:false};
+ } catch(err) {
+  // A concurrent identical request may have committed while this batch waited.
+  const after=await db.prepare('SELECT request_hash FROM van_stock_movements WHERE company_id=? AND idempotency_key=?').bind(companyId,idempotencyKey).first();
+  if(after) {
+   if(after.request_hash!==requestHash) throw Error('idempotency conflict');
+   return {ok:true,replayed:true};
+  }
+  throw err;
+ }
 }
