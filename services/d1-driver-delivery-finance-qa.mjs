@@ -69,3 +69,30 @@ export async function postDeliveryFinanceQa(db,p){
   throw Error('D1 posting invariant failed');
  return {ok:true,replayed:false};
 }
+
+/**
+ * Release gate for canonical ERP finance on the SAME D1 binding.
+ * QA journals alone never satisfy this contract; never enable cutover from
+ * this check without the separate atomic canonical posting implementation.
+ */
+export async function assertCanonicalFinanceSchema(db){
+ if(typeof db?.prepare!=='function')throw Error('D1 required');
+ const required={
+  payments:['id','company_id','delivery_id','amount','method','customer_name'],
+  credit_ledger:['id','company_id','customer_id','payment_id','entry_type','amount'],
+  customers:['id','company_id','name'],
+  orders:['id','company_id','customer_id','total_amount'],
+  deliveries:['id','company_id','driver_id','order_id'],
+  van_stock_balances:['company_id','driver_id','product_id','quantity']
+ };
+ for(const [table,columns] of Object.entries(required)){
+  // Table names are hardcoded, never user supplied.
+  let result;
+  try{result=await db.prepare("PRAGMA table_info('"+table+"')").all()}
+  catch{throw Error('canonical D1 financial schema unavailable: '+table)}
+  const actual=new Set((result?.results||[]).map(row=>row.name));
+  if(columns.some(column=>!actual.has(column)))
+   throw Error('canonical D1 financial schema unavailable: '+table);
+ }
+ return {ready:true,postingEnabled:false};
+}
