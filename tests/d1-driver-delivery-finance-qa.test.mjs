@@ -88,3 +88,11 @@ test('committed batch with invalid change metadata must not be reported as repla
  await assert.rejects(postDeliveryFinanceQa(f.adapter,p),/D1 posting invariant failed/);
  assert.equal(f.count('driver_delivery_posting_receipts'),1);
 });
+
+test('canonical finance schema must be present before any delivery batch',async()=>{
+ const f=fixture();
+ const before=f.van();
+ await assert.rejects(postDeliveryFinanceQa(f.adapter,p),/canonical D1 financial schema unavailable/);
+ assert.equal(f.van(),before);
+ assert.equal(f.count('driver_delivery_posting_receipts'),0);
+});
