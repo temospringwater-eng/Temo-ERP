@@ -18,7 +18,7 @@ export function createD1DeliveryPreflightQaHandler({db,authenticate}){
   if(!validProof(body)||!validId(Number(match[1])))return json(400,{error:'signature_photo_gps_required'});
   try{
    const delivery=await db.prepare(
-    "SELECT id,status FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND status IN ('pending','assigned','in_progress')"
+    "SELECT id,status FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND status IN ('assigned','out_for_delivery')"
    ).bind(Number(match[1]),actor.companyId,actor.driverId).first();
    if(!delivery)return json(404,{error:'assigned_delivery_not_found'});
    return json(200,{eligible:true,deliveryId:delivery.id,postingEnabled:false,proofMode:'signature_photo_gps'});

@@ -5,7 +5,7 @@ const url='https://qa.example/api/driver/deliveries/19/preflight';
 const proof={signatureRef:'signed-1234',photoRef:'photo-12345',latitude:24.47,longitude:39.61};
 const make=(actor={role:'driver',companyId:2,driverId:7},found={id:19,status:'assigned'})=>{
  let bindArgs;
- const db={prepare(sql){assert.match(sql,/company_id=\? AND driver_id=\?/);return {bind(...args){bindArgs=args;return {async first(){return found}}}}}};
+ const db={prepare(sql){assert.match(sql,/company_id=\? AND driver_id=\?/);assert.match(sql,/status IN \('assigned','out_for_delivery'\)/);return {bind(...args){bindArgs=args;return {async first(){return found}}}}}};
  const handler=createD1DeliveryPreflightQaHandler({db,authenticate:async()=>actor});
  return {handler,args:()=>bindArgs};
 };
@@ -13,6 +13,11 @@ const request=(p=proof)=>new Request(url,{method:'POST',headers:{'content-type':
 test('proof and assigned driver/company preflight succeeds but never posts',async()=>{
  const f=make();const res=await f.handler(request());assert.equal(res.status,200);
  assert.deepEqual(f.args(),[19,2,7]);assert.equal((await res.json()).postingEnabled,false);
+});
+test('started out-for-delivery item passes preflight',async()=>{
+ const f=make({role:'driver',companyId:2,driverId:7},{id:19,status:'out_for_delivery'});
+ const res=await f.handler(request());
+ assert.equal(res.status,200);assert.equal((await res.json()).eligible,true);
 });
 test('missing signature photo or GPS is rejected',async()=>{
  for(const key of Object.keys(proof)){

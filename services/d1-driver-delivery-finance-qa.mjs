@@ -16,9 +16,15 @@ export function validateDeliveryFinanceInput(p){
  return Object.freeze({...p});
 }
 export async function postDeliveryFinanceQa(db,p){
- validateDeliveryFinanceInput(p);
+ const input=validateDeliveryFinanceInput(p);
  if(typeof db?.prepare!=='function'||typeof db?.batch!=='function')throw Error('D1 required');
- const hash=createHash('sha256').update(JSON.stringify(p)).digest('hex');
+ const hash=createHash('sha256').update(JSON.stringify({
+  companyId:input.companyId,driverId:input.driverId,deliveryId:input.deliveryId,
+  productId:input.productId,quantity:input.quantity,cashCents:input.cashCents,
+  creditCents:input.creditCents,bottlesReturned:input.bottlesReturned,
+  idempotencyKey:input.idempotencyKey,signatureRef:input.signatureRef,
+  photoRef:input.photoRef,latitude:input.latitude,longitude:input.longitude
+ })).digest('hex');
  const lookup=()=>db.prepare('SELECT request_hash FROM driver_delivery_posting_receipts WHERE company_id=? AND idempotency_key=?').bind(p.companyId,p.idempotencyKey).first();
  const previous=await lookup();
  if(previous){
@@ -27,8 +33,8 @@ export async function postDeliveryFinanceQa(db,p){
  }
  const bind=(sql,...args)=>db.prepare(sql).bind(...args);
  const statements=[
-  bind('INSERT INTO driver_delivery_posting_receipts(company_id,driver_id,delivery_id,idempotency_key,request_hash,amount_cents,credit_cents,bottles_out,bottles_returned) VALUES(?,?,?,?,?,?,?,?,?)',
-   p.companyId,p.driverId,p.deliveryId,p.idempotencyKey,hash,p.cashCents,p.creditCents,p.quantity,p.bottlesReturned),
+  bind('INSERT INTO driver_delivery_posting_receipts(company_id,driver_id,delivery_id,idempotency_key,request_hash,product_id,amount_cents,credit_cents,bottles_out,bottles_returned) VALUES(?,?,?,?,?,?,?,?,?,?)',
+   p.companyId,p.driverId,p.deliveryId,p.idempotencyKey,hash,p.productId,p.cashCents,p.creditCents,p.quantity,p.bottlesReturned),
   bind("INSERT INTO van_stock_movements(company_id,driver_id,product_id,idempotency_key,movement_type,quantity,request_hash) VALUES(?,?,?,?,'deliver',?,?)",
    p.companyId,p.driverId,p.productId,p.idempotencyKey,p.quantity,hash),
   bind('UPDATE van_stock_balances SET quantity=quantity-? WHERE company_id=? AND driver_id=? AND product_id=? AND quantity>=?',
@@ -41,12 +47,14 @@ export async function postDeliveryFinanceQa(db,p){
    p.companyId,p.deliveryId,p.driverId,p.creditCents),
   bind('INSERT INTO driver_delivery_proofs(company_id,delivery_id,driver_id,signature_ref,photo_ref,latitude,longitude) VALUES(?,?,?,?,?,?,?)',
    p.companyId,p.deliveryId,p.driverId,p.signatureRef,p.photoRef,p.latitude,p.longitude),
-  bind("UPDATE deliveries SET status='delivered' WHERE id=? AND company_id=? AND driver_id=? AND status IN ('pending','assigned','in_progress')",
-   p.deliveryId,p.companyId,p.driverId)
+  bind("UPDATE deliveries SET status='delivered' WHERE id=? AND company_id=? AND driver_id=? AND status IN ('assigned','out_for_delivery')",
+   p.deliveryId,p.companyId,p.driverId),
+  bind("UPDATE orders SET status='delivered' WHERE company_id=? AND id=(SELECT order_id FROM deliveries WHERE id=? AND company_id=? AND driver_id=? AND status='delivered')",
+   p.companyId,p.deliveryId,p.companyId,p.driverId)
  ];
  try{
   const result=await db.batch(statements);
-  if(result[2]?.meta?.changes!==1||result[7]?.meta?.changes!==1)
+  if(result[2]?.meta?.changes!==1||result[7]?.meta?.changes!==1||result[8]?.meta?.changes!==1)
    throw Error('D1 posting invariant failed');
   return {ok:true,replayed:false};
  }catch(error){
