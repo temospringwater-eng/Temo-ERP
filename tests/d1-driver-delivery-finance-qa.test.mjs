@@ -76,3 +76,15 @@ test('unsupported order lines or product quantities roll back posting',async()=>
   assert.equal(f.count('van_stock_movements'),0);
  }
 });
+
+test('committed batch with invalid change metadata must not be reported as replay',async()=>{
+ const f=fixture();
+ const original=f.adapter.batch;
+ f.adapter.batch=async items=>{
+  const results=await original(items);
+  results[2].meta.changes=0;
+  return results;
+ };
+ await assert.rejects(postDeliveryFinanceQa(f.adapter,p),/D1 posting invariant failed/);
+ assert.equal(f.count('driver_delivery_posting_receipts'),1);
+});
