@@ -6,6 +6,7 @@ import {debitVanStockForDeliveryQa} from '../services/d1-driver-delivery-stock-q
 function setup(){
  const db=new DatabaseSync(':memory:');
  db.exec('CREATE TABLE products(id INTEGER PRIMARY KEY,company_id INTEGER,stock INTEGER);INSERT INTO products VALUES(10,1,100)');
+ db.exec('CREATE TABLE users(id INTEGER PRIMARY KEY,company_id INTEGER NOT NULL,role TEXT NOT NULL);INSERT INTO users VALUES(5,1,\'driver\'),(6,2,\'driver\')');
  for(const file of ['0002_canonical_van_stock.sql','0003_van_delivery_stock_guard.sql'])
   db.exec(readFileSync(new URL('../migrations/d1-qa/'+file,import.meta.url),'utf8'));
  db.exec("INSERT INTO van_stock_balances VALUES(1,5,10,8)");
