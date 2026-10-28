@@ -27,7 +27,7 @@ on:
       - "*.sqlite3-*"
       - "**/*.sqlite3-*"
   push:
-    branches: [main]
+    branches: [main, qa/d1-single-source-reconciliation-gates]
     paths:
       - "server.js"
       - "services/**"
