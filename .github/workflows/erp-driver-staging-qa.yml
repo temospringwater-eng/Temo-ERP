@@ -89,7 +89,7 @@ jobs:
       - name: D1 QA migration 0001 disposable test and tracked-database guard
         run: node --experimental-sqlite --test tests/d1-qa-migration-0001.test.mjs tests/no-tracked-database-files.test.cjs tests/pr62-review-regressions.test.cjs
       - name: D1 canonical van stock unit and disposable integration QA
-        run: node --experimental-sqlite --test tests/d1-canonical-stock-contract.test.mjs tests/d1-canonical-stock.integration.test.mjs tests/d1-driver-inventory-qa.integration.test.mjs tests/d1-driver-delivery-preflight-qa.integration.test.mjs tests/d1-driver-delivery-stock-qa.integration.test.mjs tests/d1-driver-delivery-finance-qa.test.mjs
+        run: node --experimental-sqlite --test tests/d1-canonical-stock-contract.test.mjs tests/d1-canonical-stock.integration.test.mjs tests/d1-driver-inventory-qa.integration.test.mjs tests/d1-driver-delivery-preflight-qa.integration.test.mjs tests/d1-driver-delivery-stock-qa.integration.test.mjs tests/d1-driver-delivery-finance-qa.test.mjs tests/d1-driver-delivery-reconciliation-qa.test.mjs
       - name: Private local HTTPS staging TLS, login and ERP role-isolation smoke
         run: |
           node --test tests/private-https-staging-security.test.cjs
