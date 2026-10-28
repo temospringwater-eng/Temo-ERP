@@ -21,6 +21,9 @@ BEFORE INSERT ON van_stock_movements
 WHEN NEW.movement_type='load'
 BEGIN
  SELECT CASE WHEN NOT EXISTS (
+  SELECT 1 FROM users WHERE id=NEW.driver_id AND company_id=NEW.company_id
+ ) THEN RAISE(ABORT,'invalid company driver') END;
+ SELECT CASE WHEN NOT EXISTS (
   SELECT 1 FROM products WHERE id=NEW.product_id AND company_id=NEW.company_id
    AND stock>=NEW.quantity
  ) THEN RAISE(ABORT,'insufficient warehouse stock') END;

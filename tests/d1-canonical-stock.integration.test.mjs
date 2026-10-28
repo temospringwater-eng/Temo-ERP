@@ -7,6 +7,8 @@ import {transferWarehouseToVan} from '../services/d1-canonical-stock.mjs';
 function fixture() {
  const sql=readFileSync(new URL('../migrations/d1-qa/0002_canonical_van_stock.sql',import.meta.url),'utf8');
  const db=new DatabaseSync(':memory:');
+ db.exec('CREATE TABLE users(id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL);');
+ db.exec('INSERT INTO users VALUES(5,1),(6,2);');
  db.exec('CREATE TABLE products(id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL, stock INTEGER NOT NULL CHECK(stock>=0));');
  db.exec('INSERT INTO products VALUES(10,1,20),(11,2,9)');
  db.exec(sql);db.exec(sql);
@@ -47,6 +49,12 @@ test('insufficient stock rolls back all movements',async()=>{
 test('cross-company product cannot be loaded',async()=>{
  const f=fixture();await assert.rejects(transferWarehouseToVan(f.adapter,request({productId:11})),/insufficient warehouse stock/);
  assert.equal(f.stock(11),9);assert.equal(f.van(),0);assert.equal(f.movements(),0);
+});
+test('nonexistent or cross-company driver cannot be loaded',async()=>{
+ const f=fixture();
+ for(const driverId of [6,999])
+  await assert.rejects(transferWarehouseToVan(f.adapter,request({driverId})),/invalid company driver/);
+ assert.equal(f.stock(),20);assert.equal(f.van(),0);assert.equal(f.movements(),0);
 });
 test('invalid quantities and identifiers rejected',async()=>{
  const f=fixture();
