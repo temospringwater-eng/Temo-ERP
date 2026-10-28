@@ -20,7 +20,7 @@ async function applyVerifiedBridgeReceipt(tx,event,digest){
  }
  if(await tx.get('SELECT id FROM driver_finance_bridge_receipts WHERE company_id=? AND source_key=?',m.erp_company_id,s.idempotencyKey))
   fail('conflict: replay key belongs to different delivery');
- if(m.inventory_policy!=='warehouse_on_delivery'||m.invoice_policy!=='new_order_invoice')
+ // D1 van stock is already debited atomically at delivery. The legacy ERP\n // warehouse-on-delivery bridge would debit products.stock again: fail closed.\n if(event?.source?.inventorySource==='d1_van_stock')\n  fail('D1 van delivery cannot use warehouse-on-delivery bridge: double stock debit');\n if(m.inventory_policy!=='warehouse_on_delivery'||m.invoice_policy!=='new_order_invoice')
   fail('inventory or invoice policy blocked until ownership review');
  const company=await tx.get('SELECT id FROM companies WHERE id=? AND active=1',m.erp_company_id);
  const driver=await tx.get("SELECT id FROM users WHERE id=? AND company_id=? AND role IN ('driver','delivery_driver') AND active=1",m.erp_driver_id,m.erp_company_id);
