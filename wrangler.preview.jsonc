@@ -4,5 +4,15 @@
   "main": "worker/erp-d1-stage1-qa.mjs",
   "compatibility_date": "2026-10-23",
   "workers_dev": false,
-  "previews": {}
+  "previews": {},
+  "vars": {
+    "TEMO_ERP_D1_QA_MODE": "1"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "temo_erp_qa_db",
+      "database_id": "30f7fa07-1053-4fe3-8a3f-8089b146a271"
+    }
+  ]
 }
