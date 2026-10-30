@@ -19,16 +19,18 @@ jobs:
           QA_SECRET: ${{ secrets.TEMO_ERP_QA_DIAGNOSTIC_SECRET }}
         run: |
           test -n "$CF_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN missing"; exit 1; }
-          test -n "$CF_ACCOUNT" || { echo "::error::CLOUDFLARE_ACCOUNT_ID missing"; exit 1; }
+          test "$CF_ACCOUNT" = "6898496c29ed4f404929c0670bddf91b" || { echo "::error::Cloudflare account is not approved QA account"; exit 1; }
           test "${#QA_SECRET}" -ge 32 || { echo "::error::QA diagnostic secret must be at least 32 characters"; exit 1; }
       - name: Verify isolated config and source
         run: |
           node - <<'NODE'
           const fs=require('node:fs');
           const c=JSON.parse(fs.readFileSync('wrangler.preview.jsonc','utf8'));
-          if(c.name!=='temo-erp-preview-diagnostic'||c.main!=='worker/erp-d1-stage1-qa.mjs'||c.workers_dev!==false||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].binding!=='DB')process.exit(1);
+          if(c.name!=='temo-erp-preview-diagnostic'||c.main!=='worker/erp-d1-stage1-qa.mjs'||c.workers_dev!==false||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].database_id!=='30f7fa07-1053-4fe3-8a3f-8089b146a271'||c.d1_databases[0].binding!=='DB')process.exit(1);
           console.log('Isolated QA config verified; production Worker excluded');
           NODE
+      - name: Validate diagnostic Worker syntax before deployment
+        run: node --check worker/erp-d1-stage1-qa.mjs
       - name: Deploy isolated QA Worker only
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
