@@ -9,6 +9,7 @@ on:
       - 'services/driver-atomic-erp-bridge-qa.js'
       - 'tests/driver-otp-provider.integration.test.cjs'
       - 'tests/driver-atomic-sqlite3-adapter.integration.test.cjs'
+      - 'tests/driver-smtp-protocol.integration.test.cjs'
       - '.github/workflows/driver-otp-atomic-integration-qa.yml'
 permissions:
   contents: read
@@ -21,8 +22,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci
       - name: OTP provider isolated unit and SQLite integration
         run: node --experimental-sqlite --test tests/driver-otp-provider.integration.test.cjs
+      - name: Isolated localhost SMTP protocol integration
+        run: node --experimental-sqlite --test tests/driver-smtp-protocol.integration.test.cjs
       - name: Original atomic ledger rollback and idempotency regression
         run: node --experimental-sqlite --test tests/driver-atomic-ledger.test.cjs
       - name: Dedicated sqlite3 file-backed transactions integration
