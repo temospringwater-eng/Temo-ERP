@@ -11,5 +11,5 @@ TEMO_ERP_D1_QA_MODE = "1"
 [[d1_databases]]
 binding = "DB"
 database_name = "temo_erp_qa_db"
-database_id = "REPLACE_WITH_VERIFIED_QA_D1_UUID"
+database_id = "30f7fa07-1053-4fe3-8a3f-8089b146a271"
 # Set TEMO_ERP_QA_DIAGNOSTIC_SECRET via Wrangler secret, never in this file.
