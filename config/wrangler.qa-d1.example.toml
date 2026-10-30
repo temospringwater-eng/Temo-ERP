@@ -1,0 +1,15 @@
+# QA diagnostic Worker only. Do not deploy over temo-erp-qa-api.
+# Copy to a private local config and replace the UUID with the VERIFIED isolated QA D1 UUID.
+name = "temo-erp-d1-diagnostics-qa"
+main = "worker/erp-d1-stage1-qa.mjs"
+compatibility_date = "2026-10-23"
+workers_dev = false
+
+[vars]
+TEMO_ERP_D1_QA_MODE = "1"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "temo_erp_qa_db"
+database_id = "30f7fa07-1053-4fe3-8a3f-8089b146a271"
+# Set TEMO_ERP_QA_DIAGNOSTIC_SECRET via Wrangler secret, never in this file.
