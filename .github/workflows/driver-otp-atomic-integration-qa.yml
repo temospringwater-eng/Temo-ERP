@@ -43,4 +43,4 @@ jobs:
         run: |
           grep -F "process.env.NODE_ENV==='test'" server.js
           grep -F "TEMO_DRIVER_ATOMIC_QA_ENABLED" server.js
-          ! grep -qE 'wrangler deploy|cloudflare deploy|npm start|pm2 restart' .github/workflows/driver-otp-atomic-integration-qa.yml
+          ! grep -qE 'wrangler[ ]deploy|cloudflare[ ]deploy|npm[ ]start|pm2[ ]restart' .github/workflows/driver-otp-atomic-integration-qa.yml
