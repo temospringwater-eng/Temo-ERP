@@ -11,9 +11,9 @@ test('QA config points to actual diagnostic Worker, not static assets', () => {
  assert.doesNotMatch(config, /^name = "temo-erp-qa-api"$/m);
  assert.match(worker, /createErpD1QaReadinessHandler/);
 });
-test('QA D1 binding remains unconfigured until verified identity supplied', () => {
+test('QA D1 binding points to the verified isolated QA database', () => {
  assert.match(config, /^binding = "DB"$/m);
- assert.match(config, /^database_id = "REPLACE_WITH_VERIFIED_QA_D1_UUID"$/m);
+ assert.match(config, /^database_id = "30f7fa07-1053-4fe3-8a3f-8089b146a271"$/m);
  assert.match(config, /^workers_dev = false$/m);
  assert.doesNotMatch(config, /^TEMO_ERP_QA_DIAGNOSTIC_SECRET\s*=/m);
 });
