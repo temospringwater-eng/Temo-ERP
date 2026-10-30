@@ -1,4 +1,4 @@
-// Generated from pinned ERP server.js Git blob acdc24e8d829dfd2f43fdecfc6b9f06aa67fed23.
+// Generated from pinned ERP server.js Git blob c0f8690e91d0117dc8a276a0893652b0deaad251.
 // 114 safe physical base table names; document_records_v4 is a temporary rebuild table, NOT ERP runtime catalog.
 // Do not edit by hand. TDD compares this list with the exact verified source on every ERP CI run.
 export const ERP_D1_BASE_TABLES=Object.freeze([
