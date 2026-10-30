@@ -1,0 +1,79 @@
+name: TEMO QA D1 encrypted backup and isolated restore proof
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup-restore-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      QA_BACKUP_PASSPHRASE: ${{ secrets.TEMO_QA_D1_BACKUP_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed on missing secrets and wrong account
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Cloudflare API token missing"; exit 1; }
+          test "$CLOUDFLARE_ACCOUNT_ID" = "6898496c29ed4f404929c0670bddf91b" || { echo "::error::Wrong Cloudflare account"; exit 1; }
+          test "${#QA_BACKUP_PASSPHRASE}" -ge 32 || { echo "::error::Backup passphrase must be >=32 chars"; exit 1; }
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.preview.jsonc','utf8'));
+          if(c.name!=='temo-erp-preview-diagnostic'||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].database_id!=='30f7fa07-1053-4fe3-8a3f-8089b146a271')process.exit(1);
+          console.log('Approved QA D1 identity verified');
+          NODE
+      - name: Export full QA D1 SQL without remote writes
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/temo-d1"
+          npx --yes wrangler@4.156.0 d1 export temo_erp_qa_db --config wrangler.preview.jsonc --remote --output "$RUNNER_TEMP/temo-d1/qa.sql"
+          test -s "$RUNNER_TEMP/temo-d1/qa.sql"
+      - name: Restore export to isolated local SQLite and verify integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,sqlite3,hashlib,json,pathlib
+          d=pathlib.Path(os.environ['RUNNER_TEMP'])/'temo-d1'
+          sql=(d/'qa.sql').read_text()
+          assert sql.strip(), 'Empty SQL export'
+          db=sqlite3.connect(str(d/'restored.sqlite'))
+          db.executescript(sql)
+          integrity=db.execute('PRAGMA integrity_check').fetchone()[0]
+          assert integrity=='ok',f'Integrity failed: {integrity}'
+          names=[r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+          assert len(names)>0,'No restored tables'
+          counts={name:db.execute('SELECT COUNT(*) FROM "'+name.replace('"','""')+'"').fetchone()[0] for name in names}
+          proof={'integrity':integrity,'table_count':len(names),'tables':names,'row_counts':counts,'sha256':hashlib.sha256((d/'qa.sql').read_bytes()).hexdigest()}
+          (d/'restore-proof.json').write_text(json.dumps(proof,indent=2))
+          print('Isolated local restore verified; tables:',len(names))
+          db.close()
+          PY
+      - name: Encrypt backup and proof with AES-256-GCM alternative AES-256-CBC PBKDF2
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/temo-d1"
+          tar -czf backup-and-proof.tar.gz qa.sql restore-proof.json
+          openssl enc -aes-256-cbc -pbkdf2 -iter 250000 -salt -in backup-and-proof.tar.gz -out backup-and-proof.tar.gz.enc -pass env:QA_BACKUP_PASSPHRASE
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in backup-and-proof.tar.gz.enc -out verify.tar.gz -pass env:QA_BACKUP_PASSPHRASE
+          cmp backup-and-proof.tar.gz verify.tar.gz
+          rm -f qa.sql restored.sqlite restore-proof.json backup-and-proof.tar.gz verify.tar.gz
+      - name: Upload encrypted backup only (1 day)
+        uses: actions/upload-artifact@v4
+        with:
+          name: temo-qa-d1-encrypted-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/temo-d1/backup-and-proof.tar.gz.enc
+          retention-days: 1
+          if-no-files-found: error
+      - name: Clean sensitive temporary files
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/temo-d1"
