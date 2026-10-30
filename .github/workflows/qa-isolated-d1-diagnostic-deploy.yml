@@ -42,3 +42,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           QA_SECRET: ${{ secrets.TEMO_ERP_QA_DIAGNOSTIC_SECRET }}
         run: printf '%s' "$QA_SECRET" | npx --yes wrangler@4.156.0 secret put TEMO_ERP_QA_DIAGNOSTIC_SECRET --config wrangler.preview.jsonc
+      - name: Verify deployed QA diagnostic secret is registered
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.156.0 secret list --config wrangler.preview.jsonc > qa-secret-names.json
+          node -e 'const fs=require("node:fs");const secrets=JSON.parse(fs.readFileSync("qa-secret-names.json","utf8"));if(!Array.isArray(secrets)||!secrets.some(s=>s.name==="TEMO_ERP_QA_DIAGNOSTIC_SECRET"))process.exit(1);console.log("Isolated QA diagnostic secret name verified")'
+          rm -f qa-secret-names.json
