@@ -1,0 +1,42 @@
+name: TEMO isolated QA D1 diagnostic deploy (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy-qa-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed if Cloudflare QA credentials are missing
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QA_SECRET: ${{ secrets.TEMO_ERP_QA_DIAGNOSTIC_SECRET }}
+        run: |
+          test -n "$CF_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN missing"; exit 1; }
+          test -n "$CF_ACCOUNT" || { echo "::error::CLOUDFLARE_ACCOUNT_ID missing"; exit 1; }
+          test "${#QA_SECRET}" -ge 32 || { echo "::error::QA diagnostic secret must be at least 32 characters"; exit 1; }
+      - name: Verify isolated config and source
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.preview.jsonc','utf8'));
+          if(c.name!=='temo-erp-preview-diagnostic'||c.main!=='worker/erp-d1-stage1-qa.mjs'||c.workers_dev!==false||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].binding!=='DB')process.exit(1);
+          console.log('Isolated QA config verified; production Worker excluded');
+          NODE
+      - name: Deploy isolated QA Worker only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.156.0 deploy --config wrangler.preview.jsonc
+      - name: Set private diagnostic token on isolated QA Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QA_SECRET: ${{ secrets.TEMO_ERP_QA_DIAGNOSTIC_SECRET }}
+        run: printf '%s' "$QA_SECRET" | npx --yes wrangler@4.156.0 secret put TEMO_ERP_QA_DIAGNOSTIC_SECRET --config wrangler.preview.jsonc
