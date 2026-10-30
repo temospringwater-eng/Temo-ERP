@@ -2,7 +2,7 @@
 // A live migration, even of "IF NOT EXISTS" DDL, requires separately reviewed QA approval.
 import {createHash} from 'node:crypto';
 const STOP=s=>{throw Error('STOP: ERP/D1 full-schema preflight '+s)};
-const PINNED_ERP_BLOB='acdc24e8d829dfd2f43fdecfc6b9f06aa67fed23';
+const PINNED_ERP_BLOB='c0f8690e91d0117dc8a276a0893652b0deaad251';
 const SAFE_NAME=/^[a-z][a-z0-9_]{0,99}$/;
 const CREATE_RE=/db\.run\(\s*`(\s*CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_]\w*)[\s\S]*?)`\s*(?:,|\))/gi;
 const gitBlob=source=>createHash('sha1').update('blob '+Buffer.byteLength(source,'utf8')+'\0'+source).digest('hex');

@@ -1,4 +1,4 @@
-// Source: acdc24e8d829dfd2f43fdecfc6b9f06aa67fed23 pinned server.js 114 safe base table FOREIGN KEY declarations.
+// Source: c0f8690e91d0117dc8a276a0893652b0deaad251 pinned server.js 114 safe base table FOREIGN KEY declarations.
 // READ-ONLY QA metadata, not a remote D1 migration or runtime schema approval.
 export const ERP_D1_BASE_FOREIGN_KEYS=Object.freeze({
  "attendance_records": [

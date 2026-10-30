@@ -1218,7 +1218,6 @@ function renderDriverDeliveries() {
       <form class="driver-action-form" data-delivery-id="${delivery.id}">
         <div class="field-row three-col"><input name="amount" type="number" min="0" step="0.01" placeholder="Collected amount" /><select name="method"><option value="">Payment method</option><option>Cash</option><option>Bank Transfer</option><option>Card</option><option>Cheque</option></select><select name="bottleId"><option value="">Bottle type</option>${bottleOptions}</select></div>
         <div class="field-row three-col"><input name="bottleReturnCount" type="number" min="0" step="1" value="0" placeholder="Returned bottles" /><input name="emptyCount" type="number" min="0" step="1" value="0" placeholder="Empty count" /><input name="rescheduledFor" type="date" /></div>
-        <div class="field-row three-col"><input name="otpChallengeId" placeholder="OTP challenge ID" /><input name="otpCode" inputmode="numeric" pattern="\\d{6}" placeholder="Customer OTP (deliver)" /><button type="button" class="action-btn request-otp-btn">Request OTP</button></div>
         <div class="field-row three-col"><input name="signatureStorageKey" placeholder="Signature storage key" /><input name="signatureContentType" value="image/png" placeholder="Signature MIME" /><input name="signatureByteSize" type="number" min="1" placeholder="Signature bytes" /></div>
         <div class="field-row two-col"><input name="signatureSha256" pattern="[a-fA-F0-9]{64}" placeholder="Signature SHA-256" /><input name="photoStorageKey" placeholder="Photo storage key (optional)" /></div>
         <div class="field-row three-col"><input name="photoContentType" value="image/jpeg" placeholder="Photo MIME" /><input name="photoByteSize" type="number" min="1" placeholder="Photo bytes" /><input name="photoSha256" pattern="[a-fA-F0-9]{64}" placeholder="Photo SHA-256" /></div>
@@ -1230,13 +1229,6 @@ function renderDriverDeliveries() {
   historyBody.innerHTML = state.driverHistory.map((delivery) => `<div class="history-row"><span>#${delivery.id} ${delivery.customer_name}</span><span>${driverStatusLabel(delivery.status)}</span><span>${delivery.delivered_at || delivery.updated_at || '-'}</span><span>${formatCurrency(delivery.collected_amount)}</span></div>`).join('') || '<p>No completed delivery history.</p>';
   body.querySelectorAll('.driver-action-form').forEach((form) => {
     form.addEventListener('submit', handleDriverAction);
-    form.querySelector('.request-otp-btn')?.addEventListener('click', async () => {
-      const response = await fetch(`/api/driver/deliveries/${form.dataset.deliveryId}/otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) return alert(result.message || 'Could not request OTP.');
-      form.elements.otpChallengeId.value = result.challengeId;
-      alert(`OTP requested for the customer. Challenge ${result.challengeId} expires in ${Math.round(result.expiresInSeconds / 60)} minutes.`);
-    });
   });
 }
 
