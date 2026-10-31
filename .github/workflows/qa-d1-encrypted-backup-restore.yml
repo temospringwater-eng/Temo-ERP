@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 20
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: '6898496c29ed4f404929c0670bddf91b'
       QA_BACKUP_PASSPHRASE: ${{ secrets.TEMO_QA_D1_BACKUP_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
