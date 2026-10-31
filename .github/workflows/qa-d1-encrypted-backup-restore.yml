@@ -72,10 +72,11 @@ jobs:
             createDisposableErpSchema(reference,extractPinnedErpBaseDdl(source));
             const result=inspectDisposableD1Compatibility({erp:reference,d1:qa});
             console.log(JSON.stringify({expected:result.expectedSafeTables,overlap:result.overlap,missing:result.missingCount,driftCount:result.columnDrift.length,columnDrift:result.columnDrift,missingTables:result.missingTables},null,2));
-            if(result.columnDrift.length) {
-              console.log('DRIFT: existing QA tables differ from pinned ERP columns; migration remains blocked; backup/restore proof is independent');
+            if(!result.baseSchemaMatches) {
+              console.error('FAIL: QA base schema has missing tables or column drift; migration remains blocked');
+              process.exitCode=1;
             } else {
-              console.log('PASS: overlapping columns compatible; migration remains separately approval-gated');
+              console.log('PASS: pinned base table/column parity verified; migration remains separately approval-gated');
             }
           } finally {qa.close();reference.close();}
           NODE
