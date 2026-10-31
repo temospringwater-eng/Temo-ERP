@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "temo-erp-preview-diagnostic",
+  "name": "temo-erp-qa-api",
   "main": "worker/erp-d1-stage1-qa.mjs",
   "compatibility_date": "2026-10-23",
   "workers_dev": false,
