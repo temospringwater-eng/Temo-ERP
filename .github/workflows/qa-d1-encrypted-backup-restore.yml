@@ -32,8 +32,14 @@ jobs:
       - name: Export full QA D1 SQL without remote writes
         run: |
           set -euo pipefail
+          umask 077
           mkdir -p "$RUNNER_TEMP/temo-d1"
-          npx --yes wrangler@4.156.0 d1 export temo_erp_qa_db --config wrangler.preview.jsonc --remote --output "$RUNNER_TEMP/temo-d1/qa.sql"
+          # Wrangler prints a signed download URL; never send its output to CI logs.
+          trap 'rm -f "$RUNNER_TEMP/temo-d1/export.log"' EXIT
+          if ! npx --yes wrangler@4.156.0 d1 export temo_erp_qa_db --config wrangler.preview.jsonc --remote --output "$RUNNER_TEMP/temo-d1/qa.sql" > "$RUNNER_TEMP/temo-d1/export.log" 2>&1; then
+            echo "::error::QA export failed; sensitive CLI output withheld"
+            exit 1
+          fi
           test -s "$RUNNER_TEMP/temo-d1/qa.sql"
       - name: Restore export to isolated local SQLite and verify integrity
         shell: bash
