@@ -1,0 +1,26 @@
+name: TEMO Preview recovery unit and integration gate
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'wrangler.preview.jsonc'
+      - 'worker/erp-d1-stage1-qa.mjs'
+      - 'services/erp-d1-worker-readiness-qa.mjs'
+      - 'services/d1-erp-*.mjs'
+      - 'server.js'
+      - 'tests/preview-recovery.test.mjs'
+      - '.github/workflows/qa-d1-encrypted-backup-restore.yml'
+      - '.github/workflows/preview-recovery-qa.yml'
+permissions:
+  contents: read
+jobs:
+  preview-unit-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit and disposable SQLite integration tests (no credentials or remote writes)
+        run: node --experimental-sqlite --test tests/preview-recovery.test.mjs tests/d1-erp-full-schema-preflight.test.mjs tests/d1-erp-107-table-local-rehearsal.test.mjs tests/erp-d1-worker-readiness.integration.test.cjs

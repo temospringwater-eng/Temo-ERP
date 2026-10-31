@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 20
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: '6898496c29ed4f404929c0670bddf91b'
       QA_BACKUP_PASSPHRASE: ${{ secrets.TEMO_QA_D1_BACKUP_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
@@ -26,14 +26,20 @@ jobs:
           node - <<'NODE'
           const fs=require('node:fs');
           const c=JSON.parse(fs.readFileSync('wrangler.preview.jsonc','utf8'));
-          if(c.name!=='temo-erp-preview-diagnostic'||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].database_id!=='30f7fa07-1053-4fe3-8a3f-8089b146a271')process.exit(1);
+          if(c.name!=='temo-erp-qa-api'||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].database_id!=='30f7fa07-1053-4fe3-8a3f-8089b146a271')process.exit(1);
           console.log('Approved QA D1 identity verified');
           NODE
       - name: Export full QA D1 SQL without remote writes
         run: |
           set -euo pipefail
+          umask 077
           mkdir -p "$RUNNER_TEMP/temo-d1"
-          npx --yes wrangler@4.156.0 d1 export temo_erp_qa_db --config wrangler.preview.jsonc --remote --output "$RUNNER_TEMP/temo-d1/qa.sql"
+          # Wrangler prints a signed download URL; never send its output to CI logs.
+          trap 'rm -f "$RUNNER_TEMP/temo-d1/export.log"' EXIT
+          if ! npx --yes wrangler@4.156.0 d1 export temo_erp_qa_db --config wrangler.preview.jsonc --remote --output "$RUNNER_TEMP/temo-d1/qa.sql" > "$RUNNER_TEMP/temo-d1/export.log" 2>&1; then
+            echo "::error::QA export failed; sensitive CLI output withheld"
+            exit 1
+          fi
           test -s "$RUNNER_TEMP/temo-d1/qa.sql"
       - name: Restore export to isolated local SQLite and verify integrity
         shell: bash
@@ -56,6 +62,30 @@ jobs:
           print('Isolated local restore verified; tables:',len(names))
           db.close()
           PY
+      - name: TDD tests and actual QA schema parity diagnostic (read-only; migration stays blocked on drift)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --experimental-sqlite --test tests/d1-erp-full-schema-preflight.test.mjs tests/d1-erp-107-table-local-rehearsal.test.mjs
+          node --experimental-sqlite --input-type=module <<'NODE'
+          import {DatabaseSync} from 'node:sqlite';
+          import {readFileSync} from 'node:fs';
+          import {extractPinnedErpBaseDdl,createDisposableErpSchema,inspectDisposableD1Compatibility} from './services/d1-erp-full-schema-preflight.mjs';
+          const source=readFileSync('server.js','utf8');
+          const reference=new DatabaseSync(':memory:');
+          const qa=new DatabaseSync(process.env.RUNNER_TEMP+'/temo-d1/restored.sqlite',{readOnly:true});
+          try {
+            createDisposableErpSchema(reference,extractPinnedErpBaseDdl(source));
+            const result=inspectDisposableD1Compatibility({erp:reference,d1:qa});
+            console.log(JSON.stringify({expected:result.expectedSafeTables,overlap:result.overlap,missing:result.missingCount,driftCount:result.columnDrift.length,columnDrift:result.columnDrift,missingTables:result.missingTables},null,2));
+            if(!result.baseSchemaMatches) {
+              console.error('FAIL: QA base schema has missing tables or column drift; migration remains blocked');
+              process.exitCode=1;
+            } else {
+              console.log('PASS: pinned base table/column parity verified; migration remains separately approval-gated');
+            }
+          } finally {qa.close();reference.close();}
+          NODE
       - name: Encrypt backup and proof with AES-256-GCM alternative AES-256-CBC PBKDF2
         shell: bash
         run: |
