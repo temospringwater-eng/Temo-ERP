@@ -71,7 +71,7 @@ jobs:
           try {
             createDisposableErpSchema(reference,extractPinnedErpBaseDdl(source));
             const result=inspectDisposableD1Compatibility({erp:reference,d1:qa});
-            console.log(JSON.stringify({expected:result.expectedSafeTables,overlap:result.overlap,missing:result.missingCount,driftCount:result.columnDrift.length,missingTables:result.missingTables},null,2));
+            console.log(JSON.stringify({expected:result.expectedSafeTables,overlap:result.overlap,missing:result.missingCount,driftCount:result.columnDrift.length,columnDrift:result.columnDrift,missingTables:result.missingTables},null,2));
             if(result.columnDrift.length) {
               console.error('STOP: existing QA tables differ from pinned ERP columns; no migration allowed');
               process.exitCode=1;
