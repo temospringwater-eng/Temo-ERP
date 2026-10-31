@@ -56,6 +56,30 @@ jobs:
           print('Isolated local restore verified; tables:',len(names))
           db.close()
           PY
+      - name: TDD tests and actual QA schema parity (read-only; fail closed on drift)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --experimental-sqlite --test tests/d1-erp-full-schema-preflight.test.mjs tests/d1-erp-107-table-local-rehearsal.test.mjs
+          node --experimental-sqlite --input-type=module <<'NODE'
+          import {DatabaseSync} from 'node:sqlite';
+          import {readFileSync} from 'node:fs';
+          import {extractPinnedErpBaseDdl,createDisposableErpSchema,inspectDisposableD1Compatibility} from './services/d1-erp-full-schema-preflight.mjs';
+          const source=readFileSync('server.js','utf8');
+          const reference=new DatabaseSync(':memory:');
+          const qa=new DatabaseSync(process.env.RUNNER_TEMP+'/temo-d1/restored.sqlite',{readOnly:true});
+          try {
+            createDisposableErpSchema(reference,extractPinnedErpBaseDdl(source));
+            const result=inspectDisposableD1Compatibility({erp:reference,d1:qa});
+            console.log(JSON.stringify({expected:result.expectedSafeTables,overlap:result.overlap,missing:result.missingCount,driftCount:result.columnDrift.length,missingTables:result.missingTables},null,2));
+            if(result.columnDrift.length) {
+              console.error('STOP: existing QA tables differ from pinned ERP columns; no migration allowed');
+              process.exitCode=1;
+            } else {
+              console.log('PASS: overlapping columns compatible; migration remains separately approval-gated');
+            }
+          } finally {qa.close();reference.close();}
+          NODE
       - name: Encrypt backup and proof with AES-256-GCM alternative AES-256-CBC PBKDF2
         shell: bash
         run: |
