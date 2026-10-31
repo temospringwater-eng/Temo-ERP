@@ -26,7 +26,7 @@ jobs:
           node - <<'NODE'
           const fs=require('node:fs');
           const c=JSON.parse(fs.readFileSync('wrangler.preview.jsonc','utf8'));
-          if(c.name!=='temo-erp-preview-diagnostic'||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].database_id!=='30f7fa07-1053-4fe3-8a3f-8089b146a271')process.exit(1);
+          if(c.name!=='temo-erp-qa-api'||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=='temo_erp_qa_db'||c.d1_databases[0].database_id!=='30f7fa07-1053-4fe3-8a3f-8089b146a271')process.exit(1);
           console.log('Approved QA D1 identity verified');
           NODE
       - name: Export full QA D1 SQL without remote writes
