@@ -64,12 +64,12 @@ test('TDD: encrypted QA backup artifact must be preserved before expected schema
  const cleanup=position('Clean sensitive temporary files');
  assert.ok(encrypt>=0 && encrypt<upload && upload<parity && parity<cleanup,'encrypted backup must be uploaded before expected schema-drift failure');
  const encryptBlock=workflow.slice(encrypt,upload);
- assert.doesNotMatch(encryptBlock,/rm -f[^\n]*restored\\.sqlite/,'read-only parity still needs the restored database');
+ assert.ok(!encryptBlock.split('\n').some(x=>x.includes('rm -f')&&x.includes('restored.sqlite')),'read-only parity still needs restored database');
  const artifactBlock=workflow.slice(upload,parity);
- assert.match(artifactBlock,/backup-and-proof\\.tar\\.gz\\.enc/);
- assert.match(artifactBlock,/retention-days:\\s*1/);
- assert.doesNotMatch(artifactBlock,/restored\\.sqlite/,'do not upload plaintext database');
+ assert.ok(artifactBlock.includes('backup-and-proof.tar.gz.enc'),'upload must be encrypted only');
+ assert.ok(artifactBlock.includes('retention-days: 1'),'short retention is mandatory');
+ assert.ok(!artifactBlock.includes('restored.sqlite'),'do not upload plaintext DB');
  const parityBlock=workflow.slice(parity,cleanup);
- assert.match(parityBlock,/process\\.exitCode=1/,'schema drift must remain a blocking failure');
- assert.match(workflow.slice(cleanup),/if:\\s*always\\(\\)/,'sensitive temporary SQL/database must be cleaned even on parity failure');
+ assert.ok(parityBlock.includes('process.exitCode=1'),'schema drift must remain a blocking failure');
+ assert.ok(workflow.slice(cleanup).includes('if: always()'),'temporary plaintext SQL/database must be cleaned on failure');
 });
