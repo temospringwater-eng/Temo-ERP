@@ -54,3 +54,22 @@ for (const failure of [false,true]) test(`Integration: export logs remain privat
  assert.equal(r.status===0,!failure,'export failure must remain fatal');
  assert.doesNotMatch(r.stdout+r.stderr,/TEST_ONLY_SECRET/,'export output must never reach Actions logs');
 });
+
+test('TDD: encrypted QA backup artifact must be preserved before expected schema-parity failure',()=>{
+ const workflow=readFileSync(new URL('.github/workflows/qa-d1-encrypted-backup-restore.yml',root),'utf8');
+ const position=name=>workflow.indexOf('      - name: '+name);
+ const encrypt=position('Encrypt backup and proof with AES-256-GCM alternative AES-256-CBC PBKDF2');
+ const upload=position('Upload encrypted backup only (1 day)');
+ const parity=position('TDD tests and actual QA schema parity diagnostic (read-only; migration stays blocked on drift)');
+ const cleanup=position('Clean sensitive temporary files');
+ assert.ok(encrypt>=0 && encrypt<upload && upload<parity && parity<cleanup,'encrypted backup must be uploaded before expected schema-drift failure');
+ const encryptBlock=workflow.slice(encrypt,upload);
+ assert.doesNotMatch(encryptBlock,/rm -f[^\n]*restored\\.sqlite/,'read-only parity still needs the restored database');
+ const artifactBlock=workflow.slice(upload,parity);
+ assert.match(artifactBlock,/backup-and-proof\\.tar\\.gz\\.enc/);
+ assert.match(artifactBlock,/retention-days:\\s*1/);
+ assert.doesNotMatch(artifactBlock,/restored\\.sqlite/,'do not upload plaintext database');
+ const parityBlock=workflow.slice(parity,cleanup);
+ assert.match(parityBlock,/process\\.exitCode=1/,'schema drift must remain a blocking failure');
+ assert.match(workflow.slice(cleanup),/if:\\s*always\\(\\)/,'sensitive temporary SQL/database must be cleaned even on parity failure');
+});
