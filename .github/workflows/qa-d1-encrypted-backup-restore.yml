@@ -62,6 +62,24 @@ jobs:
           print('Isolated local restore verified; tables:',len(names))
           db.close()
           PY
+      - name: Encrypt backup and proof with AES-256-GCM alternative AES-256-CBC PBKDF2
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/temo-d1"
+          tar -czf backup-and-proof.tar.gz qa.sql restore-proof.json
+          openssl enc -aes-256-cbc -pbkdf2 -iter 250000 -salt -in backup-and-proof.tar.gz -out backup-and-proof.tar.gz.enc -pass env:QA_BACKUP_PASSPHRASE
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in backup-and-proof.tar.gz.enc -out verify.tar.gz -pass env:QA_BACKUP_PASSPHRASE
+          cmp backup-and-proof.tar.gz verify.tar.gz
+          # Keep restored.sqlite only for the post-artifact read-only schema parity gate; ALWAYS cleanup deletes it.
+          rm -f qa.sql restore-proof.json backup-and-proof.tar.gz verify.tar.gz
+      - name: Upload encrypted backup only (1 day)
+        uses: actions/upload-artifact@v4
+        with:
+          name: temo-qa-d1-encrypted-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/temo-d1/backup-and-proof.tar.gz.enc
+          retention-days: 1
+          if-no-files-found: error
       - name: TDD tests and actual QA schema parity diagnostic (read-only; migration stays blocked on drift)
         shell: bash
         run: |
@@ -86,23 +104,6 @@ jobs:
             }
           } finally {qa.close();reference.close();}
           NODE
-      - name: Encrypt backup and proof with AES-256-GCM alternative AES-256-CBC PBKDF2
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/temo-d1"
-          tar -czf backup-and-proof.tar.gz qa.sql restore-proof.json
-          openssl enc -aes-256-cbc -pbkdf2 -iter 250000 -salt -in backup-and-proof.tar.gz -out backup-and-proof.tar.gz.enc -pass env:QA_BACKUP_PASSPHRASE
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -in backup-and-proof.tar.gz.enc -out verify.tar.gz -pass env:QA_BACKUP_PASSPHRASE
-          cmp backup-and-proof.tar.gz verify.tar.gz
-          rm -f qa.sql restored.sqlite restore-proof.json backup-and-proof.tar.gz verify.tar.gz
-      - name: Upload encrypted backup only (1 day)
-        uses: actions/upload-artifact@v4
-        with:
-          name: temo-qa-d1-encrypted-backup-${{ github.run_id }}
-          path: ${{ runner.temp }}/temo-d1/backup-and-proof.tar.gz.enc
-          retention-days: 1
-          if-no-files-found: error
       - name: Clean sensitive temporary files
         if: always()
         shell: bash
