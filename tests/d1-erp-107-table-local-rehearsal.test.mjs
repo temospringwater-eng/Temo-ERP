@@ -80,3 +80,42 @@ test('TDD remote D1-like bind cannot be used as the local SQLite migration targe
  assert.throws(()=>planMissingErpBaseTables({source,target:{prepare(){},exec(){}}}),/STOP/);
  assert.throws(()=>applyMissingErpBaseTablesLocally({source,target:{prepare(){},exec(){}}}),/STOP/);
 });
+
+test('TDD real QA inventory shape: eight ERP overlaps mean 106 missing safe tables, not 107',t=>{
+ const f=fixture(t);
+ const sql=f.original.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='order_items'").get().sql;
+ f.qa.exec(sql);
+ const before=f.count();
+ const beforeChanges=f.qa.prepare('SELECT total_changes() AS n').get().n;
+ assert.equal(before,9); // 8 matching ERP tables + driver-only bottle_returns
+ const plan=planMissingErpBaseTables({source,target:f.qa});
+ assert.equal(plan.existingOverlap,8);
+ assert.equal(plan.addedCount,106);
+ assert.equal(plan.extraQaTables,1);
+ assert.equal(plan.missingTableNames.includes('order_items'),false);
+ assert.equal(plan.schemaReadyForRemoteMigration,false);
+ assert.equal(plan.remoteD1Changed,false);
+ assert.equal(f.count(),before);
+ const result=applyMissingErpBaseTablesLocally({source,target:f.qa});
+ assert.equal(result.addedCount,106);
+ assert.equal(result.afterTableCount,115);
+ assert.equal(result.activeWorkerDeployed,false);
+ assert.equal(result.remoteD1Changed,false);
+ assert.equal(f.qa.prepare('SELECT name FROM companies WHERE id=40').get().name,'Synthetic preserved company');
+ assert.equal(f.qa.prepare('SELECT total_changes() AS n').get().n,beforeChanges);
+ assert.deepEqual(f.qa.prepare('PRAGMA foreign_key_check').all(),[]);
+ assert.equal(applyMissingErpBaseTablesLocally({source,target:f.qa}).addedCount,0);
+});
+
+test('TDD QA-like eighth overlapping order_items table with column drift blocks all 106 additions',t=>{
+ const f=fixture(t);
+ f.qa.exec(f.original.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='order_items'").get().sql);
+ f.qa.exec('ALTER TABLE order_items ADD COLUMN subtotal REAL');
+ const before=f.count();
+ assert.equal(before,9);
+ assert.throws(()=>planMissingErpBaseTables({source,target:f.qa}),/STOP.*drift/i);
+ assert.throws(()=>applyMissingErpBaseTablesLocally({source,target:f.qa}),/STOP.*drift/i);
+ assert.equal(f.count(),before);
+ assert.equal(f.qa.prepare('SELECT name FROM companies WHERE id=40').get().name,'Synthetic preserved company');
+});
+
