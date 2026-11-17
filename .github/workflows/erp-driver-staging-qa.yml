@@ -117,3 +117,28 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Driver permission session and HTTP integration TDD
         run: node --experimental-sqlite --test tests/driver-http-permissions-integration-qa.test.js tests/d1-driver-field-read-qa.test.js
+
+  driver-qa-runner-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify runner and Node environment
+        run: |
+          node --version
+          node --check services/d1-driver-field-read-qa.mjs
+          node --check tests/driver-http-permissions-integration-qa.test.js
+          node -e "require('node:sqlite'); console.log('SQLite module available')"
+  driver-qa-permission-contract-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run self-contained HTTP permission test
+        run: node --experimental-sqlite --test tests/driver-http-permissions-integration-qa.test.js
