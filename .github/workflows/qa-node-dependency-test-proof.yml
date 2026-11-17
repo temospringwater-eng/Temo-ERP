@@ -1,0 +1,28 @@
+name: TEMO QA Node Dependency and Test Proof
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qa-node-dependency-test-proof.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/**'
+      - 'server.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-unit-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Clean dependency installation (lockfile)
+        run: npm ci --no-audit --no-fund
+      - name: Confirm dotenv resolves from installed dependencies
+        run: node -e "const p=require.resolve('dotenv'); console.log('dotenv resolved:',p)"
+      - name: Run complete Node test suite
+        run: npm test
