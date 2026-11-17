@@ -1,8 +1,13 @@
 // QA ONLY: native D1 read contracts for TEMO DRIVER. Not a login provider, not deployed.
 // Caller MUST inject a server-verified identity resolver. Never accept actor headers.
+// Must match the native Android DriverPermissionCatalog keys. Each grant is
+// read from the authenticated tenant's server-side permissions; default deny.
 const permissions = Object.freeze([
-  'create_customer','create_order','view_customer_ledger',
-  'collect_recovery','view_zone','view_van_stock'
+  'create_customer','create_order','view_balance','change_qty',
+  'change_price','edit_notes','manage_customer_schedule',
+  'gps_delivery_override','refund_security_deposit','sale_quotation',
+  'stock_negative_override','view_customer_ledger','collect_recovery',
+  'view_zone','view_van_stock'
 ]);
 const positiveId = n => Number.isSafeInteger(n) && n > 0;
 const json = (body,status=200) => new Response(JSON.stringify(body),{

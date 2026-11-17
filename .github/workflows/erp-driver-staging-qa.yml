@@ -100,3 +100,52 @@ jobs:
         run: timeout -k 5s 100s node --test tests/driver-field-operations.integration.test.cjs tests/driver-field-six-modules.integration.test.cjs tests/driver-financial-bridge.integration.test.cjs tests/driver-finance-http-qa.integration.test.cjs tests/erp-d1-worker-readiness.integration.test.cjs tests/erp-d1-stage1-worker.integration.test.mjs
       - name: Verify isolated SQLite backup and safe rollback readiness (synthetic QA only)
         run: timeout -k 5s 100s node --test tests/sqlite-restore-drill.test.cjs tests/qa-sqlite-online-backup.integration.test.cjs
+
+  driver-http-permission-isolated-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NODE_ENV: test
+      TEMO_DRIVER_FIELD_OPS_QA: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Driver permission session and HTTP integration TDD
+        run: node --experimental-sqlite --test tests/driver-http-permissions-integration-qa.test.js tests/d1-driver-field-read-qa.test.js
+
+  driver-qa-runner-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify runner and Node environment
+        run: |
+          node --version
+          node --check services/d1-driver-field-read-qa.mjs
+          node --check tests/driver-http-permissions-integration-qa.test.js
+          node -e "require('node:sqlite'); console.log('SQLite module available')"
+  driver-qa-permission-contract-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run self-contained HTTP permission test
+        run: node --experimental-sqlite --test tests/driver-http-permissions-integration-qa.test.js
+
+  actions-runner-no-checkout-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Prove GitHub hosted runner executes any shell command
+        run: echo "Runner started successfully"
