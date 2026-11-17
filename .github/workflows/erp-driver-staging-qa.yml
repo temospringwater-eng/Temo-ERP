@@ -142,3 +142,10 @@ jobs:
           node-version: '24'
       - name: Run self-contained HTTP permission test
         run: node --experimental-sqlite --test tests/driver-http-permissions-integration-qa.test.js
+
+  actions-runner-no-checkout-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Prove GitHub hosted runner executes any shell command
+        run: echo "Runner started successfully"
