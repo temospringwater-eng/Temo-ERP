@@ -7,6 +7,8 @@ import {
  inspectDisposableD1Compatibility
 } from '../services/d1-erp-full-schema-preflight.mjs';
 
+import {planMissingErpBaseTables,applyMissingErpBaseTablesLocally} from '../services/d1-erp-107-table-local-rehearsal.mjs';
+
 const source=readFileSync(new URL('../server.js',import.meta.url),'utf8');
 const CORE=['companies','users','customers','products','orders','deliveries','payments','bottle_returns'];
 function driverQaFixture(){
@@ -63,4 +65,31 @@ test('TDD reject malformed schema names and refuse unsupported missing signature
  erp.exec('CREATE TABLE companies(id INTEGER)');
  d1.exec('CREATE TABLE companies(id INTEGER)');
  assert.throws(()=>inspectDisposableD1Compatibility({erp,d1}),/STOP/);
+});
+
+test('TDD same-column foreign-key drift must STOP even when 114 names and columns match',t=>{
+ const erp=new DatabaseSync(':memory:'),d1=new DatabaseSync(':memory:');
+ t.after(()=>{erp.close();d1.close()});
+ const base=extractPinnedErpBaseDdl(source);
+ createDisposableErpSchema(erp,base);
+ const users=base.find(x=>x.name==='users');
+ assert.ok(users);
+ const weakened=users.sql.replace(/,\s*FOREIGN KEY\s*\(company_id\)\s*REFERENCES\s+companies\(id\)/i,'');
+ assert.notEqual(weakened,users.sql,'test must actually remove the user-to-company FK');
+ for(const table of base)d1.exec(table.name==='users'?weakened:table.sql);
+ d1.prepare('INSERT INTO companies(id,name) VALUES(?,?)').run(40,'Synthetic tenant');
+ d1.prepare('INSERT INTO users(id,company_id,username,password_hash,name,role) VALUES(?,?,?,?,?,?)')
+   .run(41,40,'synthetic_driver','synthetic-hash-not-a-login','Synthetic user','driver');
+ const count=()=>d1.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").get().n;
+ assert.equal(count(),114);
+ const report=inspectDisposableD1Compatibility({erp,d1});
+ assert.equal(report.missingCount,0);
+ assert.deepEqual(report.columnDrift,[]);
+ assert.equal(report.foreignKeyDrift.length,1);
+ assert.equal(report.foreignKeyDrift[0].table,'users');
+ assert.equal(report.baseSchemaMatches,false);
+ assert.throws(()=>planMissingErpBaseTables({source,target:d1}),/STOP.*foreign.key/i);
+ assert.throws(()=>applyMissingErpBaseTablesLocally({source,target:d1}),/STOP.*foreign.key/i);
+ assert.equal(count(),114);
+ assert.equal(d1.prepare('SELECT company_id FROM users WHERE id=41').get().company_id,40);
 });

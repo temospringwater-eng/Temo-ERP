@@ -15,6 +15,29 @@ function sqliteColumns(db,name){
   notnull:Number(c.notnull||0),pk:Number(c.pk||0),default:c.dflt_value??null,
   hidden:Number(c.hidden||0)}));
 }
+function sqliteForeignKeys(db,name){
+ if(!SAFE_NAME.test(name))STOP('unsafe foreign-key table name');
+ const rows=db.prepare("PRAGMA foreign_key_list('"+name+"')").all();
+ if(!Array.isArray(rows))STOP('invalid foreign-key metadata');
+ const grouped=new Map();
+ for(const r of rows){
+  const id=Number(r.id),seq=Number(r.seq);
+  if(!Number.isSafeInteger(id)||id<0||!Number.isSafeInteger(seq)||seq<0||
+     !SAFE_NAME.test(r.table)||!SAFE_NAME.test(r.from)||
+     (r.to!==null&&!SAFE_NAME.test(r.to)))
+   STOP('unreviewed foreign-key metadata');
+  const edge={seq,table:r.table,from:r.from,to:r.to??'',
+   onUpdate:String(r.on_update||''),onDelete:String(r.on_delete||''),
+   match:String(r.match||'')};
+  if(!grouped.has(id))grouped.set(id,[]);
+  grouped.get(id).push(edge);
+ }
+ // SQLite FK IDs depend on declaration order; normalize by whole FK signature.
+ return [...grouped.values()].map(edges=>JSON.stringify(
+  edges.sort((a,b)=>a.seq-b.seq)
+ )).sort();
+}
+
 const listNames=db=>{
  if(typeof db?.prepare!=='function')STOP('independent disposable SQLite connection missing');
  const result=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
@@ -60,7 +83,7 @@ export function inspectDisposableD1Compatibility({erp,d1}={}){
  const theirs=new Set(target);
  const overlapping=source.filter(n=>theirs.has(n));
  const missing=source.filter(n=>!theirs.has(n));
- const columnDrift=[];
+ const columnDrift=[],foreignKeyDrift=[];
  for(const name of overlapping){
   const expected=sqliteColumns(erp,name),actual=sqliteColumns(d1,name);
   const a=new Map(actual.map(c=>[c.name,c]));
@@ -71,10 +94,13 @@ export function inspectDisposableD1Compatibility({erp,d1}={}){
    ['type','notnull','pk','default','hidden'].some(field=>c[field]!==a.get(c.name)[field])).map(c=>c.name);
   if(missingColumns.length||addedColumns.length||incompatible.length)
    columnDrift.push({table:name,missingColumns,addedColumns,incompatible});
+  const expectedFk=sqliteForeignKeys(erp,name),actualFk=sqliteForeignKeys(d1,name);
+  if(JSON.stringify(expectedFk)!==JSON.stringify(actualFk))
+   foreignKeyDrift.push({table:name,expectedCount:expectedFk.length,actualCount:actualFk.length});
  }
  return Object.freeze({qaOnly:true,expectedSafeTables:114,overlap:overlapping.length,
-  missingCount:missing.length,missingTables:missing,columnDrift,
-  baseSchemaMatches:missing.length===0&&columnDrift.length===0,
+  missingCount:missing.length,missingTables:missing,columnDrift,foreignKeyDrift,
+  baseSchemaMatches:missing.length===0&&columnDrift.length===0&&foreignKeyDrift.length===0,
   deferredDestructiveTable:'document_records_v4',
   readyForRemoteMigration:false,liveD1Changed:false,financialSyncEnabled:false});
 }

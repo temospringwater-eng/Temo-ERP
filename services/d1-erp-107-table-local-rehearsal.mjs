@@ -32,6 +32,8 @@ export function planMissingErpBaseTables({source,target}={}){
  }finally{ref.close()}
  if(parity.columnDrift.length)
   STOP('overlap column/type/primary-key drift; requires reviewed per-table mapping before migration');
+ if(parity.foreignKeyDrift.length)
+  STOP('overlap foreign-key drift; requires reviewed relationship mapping before migration');
  const missing=new Set(parity.missingTables);
  const schemaObjects=target.prepare("SELECT name,type FROM sqlite_master WHERE type IN ('view','index','trigger')").all();
  if(schemaObjects.some(o=>missing.has(o.name)))
